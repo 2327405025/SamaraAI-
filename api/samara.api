@@ -1,0 +1,133 @@
+syntax = "v1"
+
+info (
+	title:   "Samara AI API"
+	desc:    "SamaraAI backend REST API"
+	author:  "samara"
+	version: "v1"
+)
+
+type BaseResp {
+	StatusCode int64  `json:"status_code"`
+	StatusMsg  string `json:"status_msg,optional"`
+}
+
+type LoginReq {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type LoginResp {
+	BaseResp
+	Token string `json:"token,optional"`
+}
+
+type RegisterReq {
+	Email    string `json:"email"`
+	Captcha  string `json:"captcha"`
+	Password string `json:"password"`
+}
+
+type RegisterResp {
+	BaseResp
+	Token string `json:"token,optional"`
+}
+
+type CaptchaReq {
+	Email string `json:"email"`
+}
+
+type CaptchaResp {
+	BaseResp
+}
+
+type SessionInfo {
+	SessionId string `json:"sessionId"`
+	Name      string `json:"name"`
+}
+
+type GetUserSessionsResp {
+	BaseResp
+	Sessions []SessionInfo `json:"sessions,optional"`
+}
+
+type ChatQuestionReq {
+	Question  string `json:"question"`
+	ModelType string `json:"modelType"`
+}
+
+type CreateSessionAndSendMessageResp {
+	BaseResp
+	Information string `json:"Information,optional"`
+	SessionId   string `json:"sessionId,optional"`
+}
+
+type ChatSendReq {
+	Question  string `json:"question"`
+	ModelType string `json:"modelType"`
+	SessionId string `json:"sessionId"`
+}
+
+type ChatSendResp {
+	BaseResp
+	Information string `json:"Information,optional"`
+}
+
+type ChatHistoryReq {
+	SessionId string `json:"sessionId"`
+}
+
+type HistoryItem {
+	IsUser  bool   `json:"is_user"`
+	Content string `json:"content"`
+}
+
+type ChatHistoryResp {
+	BaseResp
+	History []HistoryItem `json:"history,optional"`
+}
+
+type RecognizeImageResp {
+	BaseResp
+	ClassName string `json:"class_name,optional"`
+}
+
+type UploadFileResp {
+	BaseResp
+	FilePath string `json:"file_path,optional"`
+}
+
+@server (
+	prefix: /api/v1
+	group:  user
+)
+service samara-api {
+	@handler login
+	post /user/login (LoginReq) returns (LoginResp)
+
+	@handler register
+	post /user/register (RegisterReq) returns (RegisterResp)
+
+	@handler captcha
+	post /user/captcha (CaptchaReq) returns (CaptchaResp)
+}
+
+@server (
+	prefix:     /api/v1/AI
+	group:      chat
+	middleware: JwtAuth
+)
+service samara-api {
+	@handler getUserSessions
+	get /chat/sessions returns (GetUserSessionsResp)
+
+	@handler createSessionAndSendMessage
+	post /chat/send-new-session (ChatQuestionReq) returns (CreateSessionAndSendMessageResp)
+
+	@handler chatSend
+	post /chat/send (ChatSendReq) returns (ChatSendResp)
+
+	@handler chatHistory
+	post /chat/history (ChatHistoryReq) returns (ChatHistoryResp)
+}
+
