@@ -1,12 +1,11 @@
 package mysql
 
 import (
-	"SamaraAI/config"
+	"SamaraAI/internal/config"
 	"SamaraAI/model"
 	"fmt"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -15,21 +14,15 @@ import (
 var DB *gorm.DB
 
 func InitMysql() error {
-	host := config.GetConfig().MysqlHost
-	port := config.GetConfig().MysqlPort
-	dbname := config.GetConfig().MysqlDatabaseName
-	username := config.GetConfig().MysqlUser
-	password := config.GetConfig().MysqlPassword
-	charset := config.GetConfig().MysqlCharset
+	cfg := config.Get()
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=true&loc=Local",
+		cfg.Mysql.User, cfg.Mysql.Password, cfg.Mysql.Host, cfg.Mysql.Port, cfg.Mysql.DatabaseName, cfg.Mysql.Charset)
 
-	//dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=true&loc=Local", username, password, host, port, dbname, charset)
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=true&loc=Local", username, password, host, port, dbname, charset)
-
-	var log logger.Interface
-	if gin.Mode() == "debug" {
-		log = logger.Default.LogMode(logger.Info)
+	var logMode logger.Interface
+	if config.IsDevMode() {
+		logMode = logger.Default.LogMode(logger.Info)
 	} else {
-		log = logger.Default
+		logMode = logger.Default
 	}
 
 	db, err := gorm.Open(mysql.New(mysql.Config{
@@ -40,7 +33,7 @@ func InitMysql() error {
 		DontSupportRenameColumn:   true,
 		SkipInitializeWithVersion: false,
 	}), &gorm.Config{
-		Logger: log,
+		Logger: logMode,
 	})
 	if err != nil {
 		return err
@@ -55,7 +48,6 @@ func InitMysql() error {
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
 	DB = db
-
 	return migration()
 }
 
@@ -75,5 +67,11 @@ func InsertUser(user *model.User) (*model.User, error) {
 func GetUserByUsername(username string) (*model.User, error) {
 	user := new(model.User)
 	err := DB.Where("username = ?", username).First(user).Error
+	return user, err
+}
+
+func GetUserByEmail(email string) (*model.User, error) {
+	user := new(model.User)
+	err := DB.Where("email = ?", email).First(user).Error
 	return user, err
 }

@@ -2,7 +2,7 @@ package aihelper
 
 import (
 	"SamaraAI/common/rag"
-	"SamaraAI/config"
+	"SamaraAI/internal/config"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -34,11 +34,11 @@ type OpenAIModel struct {
 }
 
 func NewOpenAIModel(ctx context.Context) (*OpenAIModel, error) {
-	cfg := config.GetConfig()
+	cfg := config.Get()
 
-	key := cfg.OpenAIConfig.ApiKey
-	modelName := cfg.OpenAIConfig.Model
-	baseURL := cfg.OpenAIConfig.BaseUrl
+	key := cfg.OpenAI.ApiKey
+	modelName := cfg.OpenAI.Model
+	baseURL := cfg.OpenAI.BaseUrl
 
 	llm, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
 		BaseURL: baseURL,
@@ -146,10 +146,10 @@ type AliRAGModel struct {
 }
 
 func NewAliRAGModel(ctx context.Context, username string) (*AliRAGModel, error) {
-	conf := config.GetConfig()
-	key := conf.OpenAIConfig.ApiKey
-	modelName := conf.RagModelConfig.RagChatModelName
-	baseURL := conf.RagModelConfig.RagBaseUrl
+	conf := config.Get()
+	key := conf.OpenAI.ApiKey
+	modelName := conf.Rag.ChatModelName
+	baseURL := conf.Rag.BaseUrl
 
 	llm, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
 		BaseURL: baseURL,
@@ -318,10 +318,10 @@ type MCPModel struct {
 
 // NewMCPModel 创建MCP模型实例
 func NewMCPModel(ctx context.Context, username string) (*MCPModel, error) {
-	conf := config.GetConfig()
-	key := conf.OpenAIConfig.ApiKey
-	modelName := conf.RagModelConfig.RagChatModelName
-	baseURL := conf.RagModelConfig.RagBaseUrl
+	conf := config.Get()
+	key := conf.OpenAI.ApiKey
+	modelName := conf.Rag.ChatModelName
+	baseURL := conf.Rag.BaseUrl
 
 	// 创建LLM
 	llm, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{

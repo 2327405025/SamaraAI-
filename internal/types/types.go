@@ -36,17 +36,6 @@ type ChatSendReq struct {
 	SessionId string `json:"sessionId"`
 }
 
-type ChatSendResp struct {
-	BaseResp
-	Information string `json:"Information,optional"`
-}
-
-type CreateSessionAndSendMessageResp struct {
-	BaseResp
-	Information string `json:"Information,optional"`
-	SessionId   string `json:"sessionId,optional"`
-}
-
 type GetUserSessionsResp struct {
 	BaseResp
 	Sessions []SessionInfo `json:"sessions,optional"`

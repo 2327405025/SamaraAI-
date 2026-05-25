@@ -24,10 +24,12 @@ SamaraAI 是一个基于 Go（go-zero）与 Vue 3 的全栈 AI 应用平台，�
 ### 1. 配置
 
 ```bash
-cp config/config.toml.example config/config.toml
+cp etc/samara.yaml.example etc/samara.yaml
 ```
 
-编辑 `config/config.toml`，填写数据库、Redis、邮件、大模型 API Key 等配置。
+编辑 `etc/samara.yaml`，填写数据库、Redis、邮件、大模型 API Key 等配置。开发环境可设置 `Mode: dev` 开启 MySQL 详细日志与 URL token 鉴权。
+
+聊天仅支持 SSE 流式接口：`/api/v1/AI/chat/send-stream`、`/api/v1/AI/chat/send-stream-new-session`（见 `api/samara.api` 顶部注释）。
 
 ### 2. 启动后端
 
@@ -48,7 +50,7 @@ npm run serve
 ```
 ├── api/              # API 定义
 ├── common/           # 公共模块（AI、Redis、MQ、RAG 等）
-├── config/           # 业务配置
+├── etc/              # go-zero 服务配置（samara.yaml）
 ├── dao/              # 数据访问
 ├── etc/              # go-zero 服务配置
 ├── internal/         # HTTP handler / logic / middleware

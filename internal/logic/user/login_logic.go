@@ -10,8 +10,6 @@ import (
 	"SamaraAI/internal/logic/resp"
 	"SamaraAI/internal/svc"
 	"SamaraAI/internal/types"
-	usersvc "SamaraAI/service/user"
-
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -30,7 +28,7 @@ func NewLoginLogic(ctx context.Context, svcCtx *svc.ServiceContext) *LoginLogic 
 }
 
 func (l *LoginLogic) Login(req *types.LoginReq) (*types.LoginResp, error) {
-	token, code_ := usersvc.Login(req.Username, req.Password)
+	token, code_ := login(req.Username, req.Password)
 	if code_ != code.CodeSuccess {
 		return &types.LoginResp{BaseResp: resp.Base(code_)}, nil
 	}

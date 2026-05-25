@@ -1,3 +1,7 @@
+// 流式聊天路由（SSE）在 internal/handler 中手写注册：
+//   POST /api/v1/AI/chat/send-stream
+//   POST /api/v1/AI/chat/send-stream-new-session
+
 syntax = "v1"
 
 info (
@@ -56,21 +60,10 @@ type ChatQuestionReq {
 	ModelType string `json:"modelType"`
 }
 
-type CreateSessionAndSendMessageResp {
-	BaseResp
-	Information string `json:"Information,optional"`
-	SessionId   string `json:"sessionId,optional"`
-}
-
 type ChatSendReq {
 	Question  string `json:"question"`
 	ModelType string `json:"modelType"`
 	SessionId string `json:"sessionId"`
-}
-
-type ChatSendResp {
-	BaseResp
-	Information string `json:"Information,optional"`
 }
 
 type ChatHistoryReq {
@@ -121,13 +114,6 @@ service samara-api {
 	@handler getUserSessions
 	get /chat/sessions returns (GetUserSessionsResp)
 
-	@handler createSessionAndSendMessage
-	post /chat/send-new-session (ChatQuestionReq) returns (CreateSessionAndSendMessageResp)
-
-	@handler chatSend
-	post /chat/send (ChatSendReq) returns (ChatSendResp)
-
 	@handler chatHistory
 	post /chat/history (ChatHistoryReq) returns (ChatHistoryResp)
 }
-

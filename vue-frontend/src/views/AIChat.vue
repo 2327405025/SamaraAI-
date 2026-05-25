@@ -22,17 +22,12 @@
     <div class="chat-section">
       <div class="top-bar">
         <button class="back-btn" @click="$router.push('/menu')">← 返回</button>
-        <button class="sync-btn" @click="syncHistory" :disabled="!currentSessionId || tempSession">同步历史数据</button>
         <label for="modelType">选择模型：</label>
         <select id="modelType" v-model="selectedModel" class="model-select">
           <option value="1">阿里百炼</option>
           <option value="2">阿里百炼 RAG</option>
           <option value="3">阿里百炼 MCP</option>
         </select>
-        <label for="streamingMode" style="margin-left: 20px;">
-          <input type="checkbox" id="streamingMode" v-model="isStreaming" />
-          流式响应
-        </label>
         <button class="upload-btn" @click="triggerFileUpload" :disabled="uploading">📎 上传文档(.md/.txt)</button>
         <input
           ref="fileInput"
@@ -85,6 +80,7 @@
 import { ref, nextTick, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '../utils/api'
+import { consumeChatSSE, renderSimpleMarkdown } from '../utils/streamChat'
 
 export default {
   name: 'AIChat',
@@ -99,19 +95,11 @@ export default {
     const messagesRef = ref(null)
     const messageInput = ref(null)
     const selectedModel = ref('1')
-    const isStreaming = ref(false)
     const uploading = ref(false)
     const fileInput = ref(null)
 
 
-    const renderMarkdown = (text) => {
-      if (!text && text !== '') return ''
-      return String(text)
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
-        .replace(/\n/g, '<br>')
-    }
+    const renderMarkdown = renderSimpleMarkdown
 
     const loadSessions = async () => {
       try {
@@ -170,32 +158,6 @@ export default {
       scrollToBottom()
     }
 
-    const syncHistory = async () => {
-      if (!currentSessionId.value || tempSession.value) {
-        ElMessage.warning('请选择已有会话进行同步')
-        return
-      }
-      try {
-        const response = await api.post('/AI/chat/history', { sessionId: currentSessionId.value })
-        if (response.data && response.data.status_code === 1000 && Array.isArray(response.data.history)) {
-          const messages = response.data.history.map(item => ({
-            role: item.is_user ? 'user' : 'assistant',
-            content: item.content
-          }))
-          sessions.value[currentSessionId.value].messages = messages
-          currentMessages.value = [...messages]
-          await nextTick()
-          scrollToBottom()
-        } else {
-          ElMessage.error('无法获取历史数据')
-        }
-      } catch (err) {
-        console.error('Sync history error:', err)
-        ElMessage.error('请求历史数据失败')
-      }
-    }
-
-
     const sendMessage = async () => {
       if (!inputMessage.value || !inputMessage.value.trim()) {
         ElMessage.warning('请输入消息内容')
@@ -216,34 +178,23 @@ export default {
 
       try {
         loading.value = true
-        if (isStreaming.value) {
-
-          await handleStreaming(currentInput)
-        } else {
-
-          await handleNormal(currentInput)
-        }
+        await streamMessage(currentInput)
       } catch (err) {
         console.error('Send message error:', err)
         ElMessage.error('发送失败，请重试')
 
         if (!tempSession.value && currentSessionId.value && sessions.value[currentSessionId.value] && sessions.value[currentSessionId.value].messages) {
-
           const sessionArr = sessions.value[currentSessionId.value].messages
           if (sessionArr && sessionArr.length) sessionArr.pop()
         }
         currentMessages.value.pop()
       } finally {
-        if (!isStreaming.value) {
-          loading.value = false
-        }
         await nextTick()
         scrollToBottom()
       }
     }
 
-
-    async function handleStreaming(question) {
+    async function streamMessage(question) {
 
       const aiMessage = {
         role: 'assistant',
@@ -275,109 +226,39 @@ export default {
         : { question: question, modelType: selectedModel.value, sessionId: currentSessionId.value }
 
       try {
-        // 创建 fetch 连接读取 SSE 流
         const response = await fetch(url, {
           method: 'POST',
           headers,
           body: JSON.stringify(body)
         })
 
-        if (!response.ok) {
-          loading.value = false
-          throw new Error('Network response was not ok')
-        }
-
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
-
-        // 读取流数据
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          const chunk = decoder.decode(value, { stream: true })
-          buffer += chunk
-
-          // 按行分割
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || '' // 保留未完成的行
-
-          for (const line of lines) {
-            const trimmedLine = line.trim()
-            if (!trimmedLine) continue
-
-            // 处理 SSE 格式：data: <content>
-            if (trimmedLine.startsWith('data:')) {
-              const data = trimmedLine.slice(5).trim()
-              console.log('[SSE] Received:', data) // 调试日志
-
-              if (data === '[DONE]') {
-                // 流结束
-                console.log('[SSE] Stream done')
-                loading.value = false
-                currentMessages.value[aiMessageIndex].meta = { status: 'done' }
-                currentMessages.value = [...currentMessages.value]
-              } else if (data.startsWith('{')) {
-                // 尝试解析 JSON（如 sessionId）
-                try {
-                  const parsed = JSON.parse(data)
-                  if (parsed.sessionId) {
-                    const newSid = String(parsed.sessionId)
-                    console.log('[SSE] Session ID:', newSid)
-                    if (tempSession.value) {
-                      sessions.value[newSid] = {
-                        id: newSid,
-                        name: '新会话',
-                        messages: [...currentMessages.value]
-                      }
-                      currentSessionId.value = newSid
-                      tempSession.value = false
-                    }
-                  }
-                } catch (e) {
-                  // 不是 JSON，当作普通文本处理
-                  currentMessages.value[aiMessageIndex].content += data
-                  console.log('[SSE] Content updated:', currentMessages.value[aiMessageIndex].content.length)
-                }
-              } else {
-                // 普通文本数据，直接追加
-                // 使用数组索引直接更新，强制 Vue 响应式系统检测变化
-                currentMessages.value[aiMessageIndex].content += data
-                console.log('[SSE] Content updated:', currentMessages.value[aiMessageIndex].content.length)
+        await consumeChatSSE(response, {
+          onChunk: (data) => {
+            currentMessages.value[aiMessageIndex].content += data
+            currentMessages.value = [...currentMessages.value]
+            requestAnimationFrame(scrollToBottom)
+          },
+          onSessionId: (newSid) => {
+            if (tempSession.value) {
+              sessions.value[newSid] = {
+                id: newSid,
+                name: '新会话',
+                messages: [...currentMessages.value]
               }
-
-              // 每收到一条数据就立即更新 DOM
-              // 强制更新整个数组以触发响应式
-              currentMessages.value = [...currentMessages.value]
-
-              // 使用 requestAnimationFrame 强制浏览器重排
-              await new Promise(resolve => {
-                requestAnimationFrame(() => {
-                  scrollToBottom()
-                  resolve()
-                })
-              })
+              currentSessionId.value = newSid
+              tempSession.value = false
             }
+          },
+          onDone: () => {
+            loading.value = false
+            currentMessages.value[aiMessageIndex].meta = { status: 'done' }
+            currentMessages.value = [...currentMessages.value]
+            syncAssistantToSession(aiMessageIndex)
+          },
+          onError: (msg) => {
+            ElMessage.error(msg)
           }
-        }
-
-        // 流读取完成后的处理
-        loading.value = false
-        currentMessages.value[aiMessageIndex].meta = { status: 'done' }
-        currentMessages.value = [...currentMessages.value]
-
-        // 同步到 sessions 存储
-        if (!tempSession.value && currentSessionId.value && sessions.value[currentSessionId.value]) {
-          const sessMsgs = sessions.value[currentSessionId.value].messages
-          if (Array.isArray(sessMsgs) && sessMsgs.length) {
-            const lastIndex = sessMsgs.length - 1
-            if (sessMsgs[lastIndex] && sessMsgs[lastIndex].role === 'assistant') {
-              sessMsgs[lastIndex].content = currentMessages.value[aiMessageIndex].content
-            }
-          }
-        }
+        })
       } catch (err) {
         console.error('Stream error:', err)
         loading.value = false
@@ -388,56 +269,17 @@ export default {
     }
 
 
-    async function handleNormal(question) {
-      if (tempSession.value) {
-
-        const response = await api.post('/AI/chat/send-new-session', {
-          question: question,
-          modelType: selectedModel.value
-        })
-        if (response.data && response.data.status_code === 1000) {
-          const sessionId = String(response.data.sessionId)
-          const aiMessage = {
-            role: 'assistant',
-            content: response.data.Information || ''
+    const syncAssistantToSession = (aiMessageIndex) => {
+      if (!tempSession.value && currentSessionId.value && sessions.value[currentSessionId.value]) {
+        const sessMsgs = sessions.value[currentSessionId.value].messages
+        if (Array.isArray(sessMsgs) && sessMsgs.length) {
+          const lastIndex = sessMsgs.length - 1
+          if (sessMsgs[lastIndex] && sessMsgs[lastIndex].role === 'assistant') {
+            sessMsgs[lastIndex].content = currentMessages.value[aiMessageIndex].content
           }
-
-          sessions.value[sessionId] = {
-            id: sessionId,
-            name: '新会话',
-            messages: [ { role: 'user', content: question }, aiMessage ]
-          }
-          currentSessionId.value = sessionId
-          tempSession.value = false
-          currentMessages.value = [...sessions.value[sessionId].messages]
-        } else {
-          ElMessage.error(response.data?.status_msg || '发送失败')
-
-          currentMessages.value.pop()
-        }
-      } else {
-
-        const sessionMsgs = sessions.value[currentSessionId.value].messages
-
-        sessionMsgs.push({ role: 'user', content: question })
-
-        const response = await api.post('/AI/chat/send', {
-          question: question,
-          modelType: selectedModel.value,
-          sessionId: currentSessionId.value
-        })
-        if (response.data && response.data.status_code === 1000) {
-          const aiMessage = { role: 'assistant', content: response.data.Information || '' }
-          sessionMsgs.push(aiMessage)
-          currentMessages.value = [...sessionMsgs]
-        } else {
-          ElMessage.error(response.data?.status_msg || '发送失败')
-          sessionMsgs.pop() // rollback
-          currentMessages.value.pop()
         }
       }
     }
-
 
     const scrollToBottom = () => {
       if (messagesRef.value) {
@@ -513,13 +355,11 @@ export default {
       messagesRef,
       messageInput,
       selectedModel,
-      isStreaming,
       uploading,
       fileInput,
       renderMarkdown,
       createNewSession,
       switchSession,
-      syncHistory,
       sendMessage,
       triggerFileUpload,
       handleFileUpload

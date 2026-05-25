@@ -15,7 +15,8 @@
 vue-frontend/node_modules/
 vue-frontend/dist/
 
-# Local config (contains secrets)
+# Local config (copy from etc/samara.yaml.example)
+etc/samara.yaml
 config/config.toml
 
 # Runtime / uploads

@@ -55,7 +55,7 @@ func (f *AIModelFactory) registerCreators() {
 		return NewMCPModel(ctx, username)
 	}
 
-	//Ollama（目前提供接口实现，暂不提供应用，因为考虑到本地模型会占用很多空间）todo做
+	// Ollama（目前提供接口实现，暂不提供应用，因为考虑到本地模型会占用很多空间）todo做
 	f.creators["4"] = func(ctx context.Context, config map[string]interface{}) (AIModel, error) {
 		baseURL, _ := config["baseURL"].(string)
 		modelName, ok := config["modelName"].(string)
@@ -64,8 +64,6 @@ func (f *AIModelFactory) registerCreators() {
 		}
 		return NewOllamaModel(ctx, baseURL, modelName)
 	}
-	// 阿里百炼 mcp 模型
-
 }
 
 // CreateAIModel 根据类型创建 AI 模型
@@ -86,7 +84,7 @@ func (f *AIModelFactory) CreateAIHelper(ctx context.Context, modelType string, S
 	return NewAIHelper(model, SessionID), nil
 }
 
-// RegisterModel 可扩展注册
+// RegisterModel 运行时扩展注册新模型类型
 func (f *AIModelFactory) RegisterModel(modelType string, creator ModelCreator) {
 	f.creators[modelType] = creator
 }

@@ -1,7 +1,7 @@
 package redis
 
 import (
-	"SamaraAI/config"
+	"SamaraAI/internal/config"
 	"context"
 	"fmt"
 	"strconv"
@@ -16,11 +16,11 @@ var Rdb *redisCli.Client
 var ctx = context.Background()
 
 func Init() {
-	conf := config.GetConfig()
-	host := conf.RedisConfig.RedisHost
-	port := conf.RedisConfig.RedisPort
-	password := conf.RedisConfig.RedisPassword
-	db := conf.RedisDb
+	conf := config.Get()
+	host := conf.Redis.Host
+	port := conf.Redis.Port
+	password := conf.Redis.Password
+	db := conf.Redis.Db
 	addr := host + ":" + strconv.Itoa(port)
 
 	Rdb = redisCli.NewClient(&redisCli.Options{

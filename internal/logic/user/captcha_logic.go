@@ -10,8 +10,6 @@ import (
 	"SamaraAI/internal/logic/resp"
 	"SamaraAI/internal/svc"
 	"SamaraAI/internal/types"
-	usersvc "SamaraAI/service/user"
-
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -30,7 +28,7 @@ func NewCaptchaLogic(ctx context.Context, svcCtx *svc.ServiceContext) *CaptchaLo
 }
 
 func (l *CaptchaLogic) Captcha(req *types.CaptchaReq) (*types.CaptchaResp, error) {
-	code_ := usersvc.SendCaptcha(req.Email)
+	code_ := sendCaptcha(req.Email)
 	if code_ != code.CodeSuccess {
 		return &types.CaptchaResp{BaseResp: resp.Base(code_)}, nil
 	}

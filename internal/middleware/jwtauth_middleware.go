@@ -5,6 +5,7 @@ package middleware
 
 import (
 	"SamaraAI/common/code"
+	"SamaraAI/internal/config"
 	"SamaraAI/internal/contextkey"
 	"SamaraAI/internal/types"
 	"SamaraAI/utils/myjwt"
@@ -27,7 +28,7 @@ func (m *JwtAuthMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
 			token = strings.TrimPrefix(authHeader, "Bearer ")
-		} else {
+		} else if config.IsDevMode() {
 			token = r.URL.Query().Get("token")
 		}
 

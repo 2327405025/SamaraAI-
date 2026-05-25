@@ -3,39 +3,33 @@ package user
 import (
 	"SamaraAI/common/mysql"
 	"SamaraAI/model"
-	"context"
 
 	"gorm.io/gorm"
 )
 
-const (
-	CodeMsg     = "SamaraAI验证码如下(验证码仅限于2分钟有效): "
-	UserNameMsg = "SamaraAI的账号如下，请保留好，后续可以用账号进行登录 "
-)
+const UserNameMsg = "SamaraAI的账号如下，请保留好，后续可以用账号或邮箱登录 "
 
-var ctx = context.Background()
-
-// 这边只能通过账号进行登录
 func IsExistUser(username string) (bool, *model.User) {
-
-	user, err := mysql.GetUserByUsername(username)
-
-	if err == gorm.ErrRecordNotFound || user == nil {
+	u, err := mysql.GetUserByUsername(username)
+	if err == gorm.ErrRecordNotFound || u == nil {
 		return false, nil
 	}
+	return true, u
+}
 
-	return true, user
+func GetUserByEmail(email string) (*model.User, error) {
+	return mysql.GetUserByEmail(email)
 }
 
 func Register(username, email, password string) (*model.User, bool) {
-	if user, err := mysql.InsertUser(&model.User{
+	u, err := mysql.InsertUser(&model.User{
 		Email:    email,
 		Name:     username,
 		Username: username,
 		Password: password,
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, false
-	} else {
-		return user, true
 	}
+	return u, true
 }

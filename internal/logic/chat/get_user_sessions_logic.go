@@ -11,8 +11,6 @@ import (
 	"SamaraAI/internal/middleware"
 	"SamaraAI/internal/svc"
 	"SamaraAI/internal/types"
-	sessionsvc "SamaraAI/service/session"
-
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -32,7 +30,7 @@ func NewGetUserSessionsLogic(ctx context.Context, svcCtx *svc.ServiceContext) *G
 
 func (l *GetUserSessionsLogic) GetUserSessions() (*types.GetUserSessionsResp, error) {
 	userName := middleware.UserNameFromContext(l.ctx)
-	userSessions, err := sessionsvc.GetUserSessionsByUserName(userName)
+	userSessions, err := getUserSessionsByUserName(userName)
 	if err != nil {
 		return &types.GetUserSessionsResp{BaseResp: resp.Base(code.CodeServerBusy)}, nil
 	}

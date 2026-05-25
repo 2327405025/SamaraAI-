@@ -1,0 +1,59 @@
+Name: samara-api
+Host: 0.0.0.0
+Port: 9090
+Mode: dev
+Timeout: 0
+
+AppName: SamaraAI
+
+Email:
+  Authcode: your-email-auth-code
+  Email: your-email@example.com
+
+Redis:
+  Host: 127.0.0.1
+  Port: 6379
+  Password: ""
+  Db: 0
+
+Mysql:
+  Host: 127.0.0.1
+  Port: 3306
+  User: root
+  Password: ""
+  DatabaseName: SamaraAI
+  Charset: utf8mb4
+
+Jwt:
+  ExpireDuration: 8760
+  Issuer: huanheart
+  Subject: SamaraAI
+  Key: SamaraAI-v1
+
+Rabbitmq:
+  Host: localhost
+  Port: 5672
+  Username: root
+  Password: "123456"
+  Vhost: /
+
+Rag:
+  EmbeddingModel: text-embedding-v4
+  ChatModelName: qwen-turbo
+  DocDir: ./docs
+  BaseUrl: https://dashscope.aliyuncs.com/compatible-mode/v1
+  Dimension: 1024
+
+OpenAI:
+  ApiKey: your-api-key
+  Model: qwen-plus
+  BaseUrl: https://dashscope.aliyuncs.com/compatible-mode/v1
+
+AiHelper:
+  MaxSessionsPerUser: 50
+
+Image:
+  ModelPath: ./models/mobilenetv2/mobilenetv2-7.onnx
+  LabelPath: ./imagenet_classes.txt
+  InputH: 224
+  InputW: 224

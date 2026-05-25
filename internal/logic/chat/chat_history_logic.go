@@ -11,8 +11,6 @@ import (
 	"SamaraAI/internal/middleware"
 	"SamaraAI/internal/svc"
 	"SamaraAI/internal/types"
-	sessionsvc "SamaraAI/service/session"
-
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -32,7 +30,7 @@ func NewChatHistoryLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ChatH
 
 func (l *ChatHistoryLogic) ChatHistory(req *types.ChatHistoryReq) (*types.ChatHistoryResp, error) {
 	userName := middleware.UserNameFromContext(l.ctx)
-	history, code_ := sessionsvc.GetChatHistory(userName, req.SessionId)
+	history, code_ := getChatHistory(userName, req.SessionId)
 	if code_ != code.CodeSuccess {
 		return &types.ChatHistoryResp{BaseResp: resp.Base(code_)}, nil
 	}

@@ -1,9 +1,12 @@
 package aihelper
 
 import (
+	"SamaraAI/internal/config"
 	"context"
 	"sync"
 )
+
+const defaultMaxHelpersPerUser = 50
 
 var ctx = context.Background()
 
@@ -32,11 +35,12 @@ func (m *AIHelperManager) GetOrCreateAIHelper(userName string, sessionID string,
 		m.helpers[userName] = userHelpers
 	}
 
-	// 检查会话是否已存在
 	helper, exists := userHelpers[sessionID]
 	if exists {
 		return helper, nil
 	}
+
+	m.evictIfNeeded(userName, userHelpers)
 
 	// 创建新的AIHelper
 	factory := GetGlobalFactory()
@@ -81,23 +85,20 @@ func (m *AIHelperManager) RemoveAIHelper(userName string, sessionID string) {
 	}
 }
 
-// 获取指定用户的所有会话ID
-func (m *AIHelperManager) GetUserSessions(userName string) []string {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	userHelpers, exists := m.helpers[userName]
-	if !exists {
-		return []string{}
+func (m *AIHelperManager) evictIfNeeded(userName string, userHelpers map[string]*AIHelper) {
+	max := defaultMaxHelpersPerUser
+	if cfg := config.Get(); cfg != nil && cfg.AiHelper.MaxSessionsPerUser > 0 {
+		max = cfg.AiHelper.MaxSessionsPerUser
 	}
-
-	sessionIDs := make([]string, 0, len(userHelpers))
-	//取出所有的key
-	for sessionID := range userHelpers {
-		sessionIDs = append(sessionIDs, sessionID)
+	for len(userHelpers) >= max {
+		for sid := range userHelpers {
+			delete(userHelpers, sid)
+			break
+		}
 	}
-
-	return sessionIDs
+	if len(userHelpers) == 0 {
+		delete(m.helpers, userName)
+	}
 }
 
 // 全局管理器实例

@@ -10,8 +10,6 @@ import (
 	"SamaraAI/internal/logic/resp"
 	"SamaraAI/internal/svc"
 	"SamaraAI/internal/types"
-	usersvc "SamaraAI/service/user"
-
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -30,7 +28,7 @@ func NewRegisterLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Register
 }
 
 func (l *RegisterLogic) Register(req *types.RegisterReq) (*types.RegisterResp, error) {
-	token, code_ := usersvc.Register(req.Email, req.Password, req.Captcha)
+	token, code_ := register(req.Email, req.Password, req.Captcha)
 	if code_ != code.CodeSuccess {
 		return &types.RegisterResp{BaseResp: resp.Base(code_)}, nil
 	}

@@ -3,7 +3,7 @@ package rag
 import (
 	"SamaraAI/common/redis"
 	redisPkg "SamaraAI/common/redis"
-	"SamaraAI/config"
+	"SamaraAI/internal/config"
 	"context"
 	"fmt"
 	"os"
@@ -36,18 +36,18 @@ func NewRAGIndexer(filename, embeddingModel string) (*RAGIndexer, error) {
 	ctx := context.Background()
 
 	// 从环境变量中读取调用向量模型所需的 API Key
-	conf := config.GetConfig()
-	apiKey := conf.OpenAIConfig.ApiKey
+	conf := config.Get()
+	apiKey := conf.OpenAI.ApiKey
 
 	// 向量的维度大小（等于向量模型输出的数字个数）
 	// Redis 在创建向量索引时必须提前知道这个值
-	dimension := config.GetConfig().RagModelConfig.RagDimension
+	dimension := config.Get().Rag.Dimension
 
 	// 1. 配置并创建“向量生成器”（Embedding）
 	// 可以理解为：找一个“翻译官”，
 	// 专门负责把文本翻译成 AI 能理解的“向量表示”
 	embedConfig := &embeddingArk.EmbeddingConfig{
-		BaseURL: config.GetConfig().RagModelConfig.RagBaseUrl, // 向量模型服务地址
+		BaseURL: config.Get().Rag.BaseUrl,
 		APIKey:  apiKey,                                       // 鉴权信息
 		Model:   embeddingModel,                               // 使用哪个向量模型
 	}
@@ -167,14 +167,13 @@ func DeleteIndex(ctx context.Context, filename string) error {
 
 // NewRAGQuery 创建 RAG 查询器（用于向量检索和问答）
 func NewRAGQuery(ctx context.Context, username string) (*RAGQuery, error) {
-	cfg := config.GetConfig()
-	apiKey := cfg.OpenAIConfig.ApiKey
+	cfg := config.Get()
+	apiKey := cfg.OpenAI.ApiKey
 
-	// 创建 embedding 模型
 	embedConfig := &embeddingArk.EmbeddingConfig{
-		BaseURL: cfg.RagModelConfig.RagBaseUrl,
+		BaseURL: cfg.Rag.BaseUrl,
 		APIKey:  apiKey,
-		Model:   cfg.RagModelConfig.RagEmbeddingModel,
+		Model:   cfg.Rag.EmbeddingModel,
 	}
 	embedder, err := embeddingArk.NewEmbedder(ctx, embedConfig)
 	if err != nil {

@@ -4,7 +4,7 @@ import (
 	"SamaraAI/common/code"
 	"SamaraAI/internal/logic/resp"
 	"SamaraAI/internal/types"
-	imagesvc "SamaraAI/service/image"
+	imglogic "SamaraAI/internal/logic/image"
 	"log"
 	"net/http"
 
@@ -24,7 +24,7 @@ func RecognizeImageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	className, err := imagesvc.RecognizeImage(header)
+	className, err := imglogic.RecognizeImage(header)
 	if err != nil {
 		log.Println("RecognizeImage fail", err)
 		httpx.OkJson(w, resp.Base(code.CodeServerBusy))

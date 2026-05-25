@@ -1,7 +1,7 @@
 package rabbitmq
 
 import (
-	"SamaraAI/config"
+	"SamaraAI/internal/config"
 	"fmt"
 	"log"
 
@@ -14,10 +14,10 @@ var conn *amqp.Connection
 
 // 初始化connection
 func initConn() {
-	c := config.GetConfig()
+	c := config.Get()
 	mqUrl := fmt.Sprintf(
 		"amqp://%s:%s@%s:%d/%s",
-		c.RabbitmqUsername, c.RabbitmqPassword, c.RabbitmqHost, c.RabbitmqPort, c.RabbitmqVhost,
+		c.Rabbitmq.Username, c.Rabbitmq.Password, c.Rabbitmq.Host, c.Rabbitmq.Port, c.Rabbitmq.Vhost,
 	)
 	log.Println("mqUrl is  " + mqUrl)
 	var err error
