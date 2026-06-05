@@ -36,6 +36,7 @@ func CreateStreamSessionAndSendMessageHandler(_ *svc.ServiceContext) http.Handle
 			httpx.Error(w, fmt.Errorf("streaming unsupported"))
 			return
 		}
+		sse.WriteComment(w, flusher, "connected")
 
 		sessionID, code_ := chatlogic.CreateStreamSessionOnly(userName, req.Question)
 		if code_ != code.CodeSuccess {
@@ -67,6 +68,7 @@ func ChatStreamSendHandler(_ *svc.ServiceContext) http.HandlerFunc {
 			httpx.Error(w, fmt.Errorf("streaming unsupported"))
 			return
 		}
+		sse.WriteComment(w, flusher, "connected")
 
 		code_ := chatlogic.ChatStreamSend(r.Context(), userName, req.SessionId, req.Question, req.ModelType, w)
 		if code_ != code.CodeSuccess && r.Context().Err() == nil {

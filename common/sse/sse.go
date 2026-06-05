@@ -29,3 +29,9 @@ func WriteDone(w http.ResponseWriter, flusher http.Flusher) {
 	fmt.Fprint(w, "data: [DONE]\n\n")
 	flusher.Flush()
 }
+
+// WriteComment sends an SSE comment line so clients/proxies flush early.
+func WriteComment(w http.ResponseWriter, flusher http.Flusher, comment string) {
+	fmt.Fprintf(w, ": %s\n\n", comment)
+	flusher.Flush()
+}

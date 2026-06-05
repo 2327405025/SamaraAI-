@@ -1,82 +1,46 @@
 <template>
-  <div class="register-container">
-    <el-card class="register-card">
-      <template #header>
-        <div class="card-header">
-          <h2>注册</h2>
-        </div>
-      </template>
-      <el-form
-        ref="registerFormRef"
-        :model="registerForm"
-        :rules="registerRules"
-        label-width="80px"
-      >
+  <div class="auth-page">
+    <div class="auth-panel auth-panel-wide">
+      <div class="auth-brand">
+        <span class="auth-logo">S</span>
+        <h1>创建账号</h1>
+        <p>注册后验证码将发送至邮箱</p>
+      </div>
+
+      <el-form ref="registerFormRef" :model="registerForm" :rules="registerRules" label-position="top" class="auth-form">
         <el-form-item label="邮箱" prop="email">
-          <el-input
-            v-model="registerForm.email"
-            placeholder="请输入邮箱"
-            type="email"
-          />
+          <el-input v-model="registerForm.email" type="email" placeholder="your@email.com" size="large" />
         </el-form-item>
         <el-form-item label="验证码" prop="captcha">
-          <el-row :gutter="10">
-            <el-col :span="16">
-              <el-input
-                v-model="registerForm.captcha"
-                placeholder="请输入验证码"
-              />
-            </el-col>
-            <el-col :span="8">
-              <el-button
-                type="primary"
-                :loading="codeLoading"
-                :disabled="countdown > 0"
-                @click="sendCode"
-                style="width: 100%"
-              >
-                {{ countdown > 0 ? `${countdown}s` : '发送验证码' }}
-              </el-button>
-            </el-col>
-          </el-row>
+          <div class="captcha-row">
+            <el-input v-model="registerForm.captcha" placeholder="6 位验证码" size="large" />
+            <el-button
+              type="primary"
+              plain
+              :loading="codeLoading"
+              :disabled="countdown > 0"
+              size="large"
+              @click="sendCode"
+            >
+              {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
+            </el-button>
+          </div>
         </el-form-item>
         <el-form-item label="密码" prop="password">
-          <el-input
-            v-model="registerForm.password"
-            placeholder="请输入密码"
-            type="password"
-            show-password
-          />
+          <el-input v-model="registerForm.password" type="password" show-password placeholder="至少 6 位" size="large" />
         </el-form-item>
         <el-form-item label="确认密码" prop="confirmPassword">
-          <el-input
-            v-model="registerForm.confirmPassword"
-            placeholder="请再次输入密码"
-            type="password"
-            show-password
-          />
+          <el-input v-model="registerForm.confirmPassword" type="password" show-password placeholder="再次输入" size="large" />
         </el-form-item>
-        <el-form-item>
-          <el-button
-            type="primary"
-            :loading="loading"
-            @click="handleRegister"
-            style="width: 100%"
-          >
-            注册
-          </el-button>
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            type="text"
-            @click="$router.push('/login')"
-            style="width: 100%"
-          >
-            已有账号？去登录
-          </el-button>
-        </el-form-item>
+        <el-button type="primary" :loading="loading" class="auth-submit" size="large" @click="handleRegister">
+          注册
+        </el-button>
+        <p class="auth-switch">
+          已有账号？
+          <router-link to="/login">去登录</router-link>
+        </p>
       </el-form>
-    </el-card>
+    </div>
   </div>
 </template>
 
@@ -103,24 +67,19 @@ export default {
     })
 
     const validateConfirmPassword = (rule, value, callback) => {
-      if (value !== registerForm.password) {
-        callback(new Error('两次输入密码不一致'))
-      } else {
-        callback()
-      }
+      if (value !== registerForm.password) callback(new Error('两次密码不一致'))
+      else callback()
     }
 
     const registerRules = {
       email: [
         { required: true, message: '请输入邮箱', trigger: 'blur' },
-        { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
+        { type: 'email', message: '邮箱格式不正确', trigger: 'blur' }
       ],
-      captcha: [
-        { required: true, message: '请输入验证码', trigger: 'blur' }
-      ],
+      captcha: [{ required: true, message: '请输入验证码', trigger: 'blur' }],
       password: [
         { required: true, message: '请输入密码', trigger: 'blur' },
-        { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
+        { min: 6, message: '至少 6 位', trigger: 'blur' }
       ],
       confirmPassword: [
         { required: true, message: '请确认密码', trigger: 'blur' },
@@ -130,27 +89,24 @@ export default {
 
     const sendCode = async () => {
       if (!registerForm.email) {
-        ElMessage.warning('请先输入邮箱')
+        ElMessage.warning('请先填写邮箱')
         return
       }
       try {
         codeLoading.value = true
         const response = await api.post('/user/captcha', { email: registerForm.email })
         if (response.data.status_code === 1000) {
-          ElMessage.success('验证码发送成功')
+          ElMessage.success('验证码已发送')
           countdown.value = 60
           const timer = setInterval(() => {
             countdown.value--
-            if (countdown.value <= 0) {
-              clearInterval(timer)
-            }
+            if (countdown.value <= 0) clearInterval(timer)
           }, 1000)
         } else {
-          ElMessage.error(response.data.status_msg || '验证码发送失败')
+          ElMessage.error(response.data.status_msg || '发送失败')
         }
-      } catch (error) {
-        console.error('Send code error:', error)
-        ElMessage.error('验证码发送失败，请重试')
+      } catch {
+        ElMessage.error('发送失败')
       } finally {
         codeLoading.value = false
       }
@@ -161,9 +117,9 @@ export default {
         await registerFormRef.value.validate()
         loading.value = true
         const response = await api.post('/user/register', {
-              email: registerForm.email,
-              captcha: registerForm.captcha,
-              password: registerForm.password
+          email: registerForm.email,
+          captcha: registerForm.captcha,
+          password: registerForm.password
         })
         if (response.data.status_code === 1000) {
           ElMessage.success('注册成功，请登录')
@@ -172,8 +128,7 @@ export default {
           ElMessage.error(response.data.status_msg || '注册失败')
         }
       } catch (error) {
-        console.error('Register error:', error)
-        ElMessage.error('注册失败，请重试')
+        if (error !== false) ElMessage.error('注册失败')
       } finally {
         loading.value = false
       }
@@ -194,129 +149,92 @@ export default {
 </script>
 
 <style scoped>
-.register-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.auth-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  position: relative;
-  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--ds-bg-muted);
 }
 
-.register-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="2" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="80" r="2" fill="rgba(255,255,255,0.1)"/><circle cx="40" cy="60" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="60" cy="30" r="1.5" fill="rgba(255,255,255,0.1)"/></svg>');
-  animation: float 20s ease-in-out infinite;
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0px) rotate(0deg); }
-  50% { transform: translateY(-20px) rotate(180deg); }
-}
-
-.register-card {
-  width: 420px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  animation: slideIn 0.8s ease-out;
-  position: relative;
-  z-index: 1;
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(30px) scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.card-header {
-  text-align: center;
-  padding: 30px 0 20px 0;
-}
-
-.card-header h2 {
-  margin: 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  font-size: 28px;
-  font-weight: 600;
-  animation: glow 2s ease-in-out infinite alternate;
-}
-
-@keyframes glow {
-  from { filter: brightness(1); }
-  to { filter: brightness(1.2); }
-}
-
-.el-form-item {
-  margin-bottom: 20px;
-}
-
-.el-input {
-  transition: all 0.3s ease;
-}
-
-.el-input:focus-within {
-  transform: scale(1.02);
-}
-
-.el-row {
-  animation: fadeIn 0.6s ease-out 0.3s both;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.el-button {
-  height: 44px;
-  border-radius: 12px;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.el-button::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
+.auth-panel {
   width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-  transition: left 0.5s;
+  max-width: 400px;
+  padding: 40px 36px;
+  background: var(--ds-bg);
+  border: 1px solid var(--ds-border);
+  border-radius: 16px;
+  box-shadow: var(--ds-shadow);
 }
 
-.el-button:hover::before {
-  left: 100%;
+.auth-panel-wide {
+  max-width: 440px;
 }
 
-.el-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(64, 158, 255, 0.3);
-}
-
-.register-link {
+.auth-brand {
   text-align: center;
+  margin-bottom: 28px;
+}
+
+.auth-logo {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--ds-primary);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.auth-brand h1 {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.auth-brand p {
+  font-size: 14px;
+  color: var(--ds-text-secondary);
+}
+
+.captcha-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.captcha-row .el-input {
+  flex: 1;
+}
+
+.auth-form :deep(.el-form-item__label) {
+  font-weight: 500;
+}
+
+.auth-submit {
+  width: 100%;
+  margin-top: 8px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--ds-primary) !important;
+  border-color: var(--ds-primary) !important;
+}
+
+.auth-switch {
   margin-top: 20px;
-  animation: fadeIn 1s ease-out 0.5s both;
+  text-align: center;
+  font-size: 14px;
+  color: var(--ds-text-secondary);
+}
+
+.auth-switch a {
+  color: var(--ds-primary);
+  text-decoration: none;
+  font-weight: 500;
 }
 </style>

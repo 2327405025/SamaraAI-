@@ -1,0 +1,484 @@
+# SamaraAI 从零部署指南
+
+本文档面向**完全没有部署经验**的同学，手把手把 SamaraAI 跑起来。  
+默认场景是：**本机开发调试**（Windows / macOS / Linux 均可），文末附带**生产环境**简要说明。
+
+---
+
+## 一、这个项目需要什么？
+
+SamaraAI 是一个全栈 AI 应用，由 **Go 后端** + **Vue 前端** 组成，并依赖以下中间件：
+
+| 组件 | 用途 | 是否必须 |
+|------|------|----------|
+| **Go 1.24+** | 运行后端 | 必须 |
+| **Node.js 18+** | 运行 / 构建前端 | 必须 |
+| **MySQL 8.0+** | 存储用户、会话、消息 | 必须 |
+| **Redis**（需带 **RediSearch** 模块） | 验证码、RAG 向量检索 | 必须 |
+| **RabbitMQ** | 异步消息队列 | 必须 |
+| **大模型 API Key**（阿里百炼等） | AI 对话、RAG 向量化 | 必须 |
+| **QQ 邮箱授权码** | 注册验证码邮件 | 注册功能需要 |
+| **ONNX 模型文件** | 图像识别 | 可选 |
+
+整体架构：
+
+```
+浏览器 (Vue 前端 :8080)
+        │
+        ▼
+Go 后端 (:9090)
+   ├── MySQL      （用户 / 会话 / 消息）
+   ├── Redis      （验证码 + RAG 向量索引）
+   ├── RabbitMQ   （消息队列）
+   └── 外部 API   （阿里百炼 / DeepSeek 等）
+```
+
+---
+
+## 二、安装基础软件
+
+### 2.1 安装 Go
+
+1. 打开 [https://go.dev/dl/](https://go.dev/dl/) 下载 **Go 1.24** 或更高版本。
+2. 安装后打开终端，验证：
+
+```bash
+go version
+# 应输出 go version go1.24.x ...
+```
+
+### 2.2 安装 Node.js
+
+1. 打开 [https://nodejs.org/](https://nodejs.org/) 下载 **LTS 版本**（建议 18 或 20）。
+2. 验证：
+
+```bash
+node -v
+npm -v
+```
+
+### 2.3 安装 Git
+
+1. 打开 [https://git-scm.com/downloads](https://git-scm.com/downloads) 下载并安装。
+2. 验证：
+
+```bash
+git --version
+```
+
+### 2.4（可选）图像识别需要的 C 编译器
+
+图像识别使用 ONNX Runtime，在 **Windows** 上需要 **gcc**（用于 cgo）：
+
+- 安装 [MSYS2](https://www.msys2.org/)，然后在 MSYS2 终端执行：`pacman -S mingw-w64-x86_64-gcc`
+- 把 `C:\msys64\mingw64\bin` 加入系统 PATH
+
+如果暂时不用图像识别，可跳过此步。
+
+---
+
+## 三、安装中间件
+
+下面提供 **Docker 一键安装**（推荐新手）和 **手动安装** 两种方式，**二选一**即可。
+
+### 方式 A：Docker 一键安装（推荐）
+
+先安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)。
+
+在项目根目录新建 `docker-compose.yml`（或直接在终端逐条 `docker run`）：
+
+```yaml
+services:
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: "123456"
+      MYSQL_DATABASE: SamaraAI
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  redis:
+    image: redis/redis-stack:latest
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: root
+      RABBITMQ_DEFAULT_PASS: "123456"
+
+volumes:
+  mysql_data:
+```
+
+启动：
+
+```bash
+docker compose up -d
+```
+
+> **注意**：RAG 功能需要 **Redis Stack**（自带 RediSearch 向量搜索），普通 `redis:latest` 不够用。
+
+### 方式 B：手动安装
+
+#### MySQL
+
+1. 下载安装 [MySQL Community Server 8.0](https://dev.mysql.com/downloads/mysql/)。
+2. 记住 root 密码。
+3. 创建数据库：
+
+```sql
+CREATE DATABASE SamaraAI CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+> 表结构无需手动建，后端启动时会通过 GORM **自动建表**。
+
+#### Redis（Redis Stack）
+
+- Windows：用 Docker 跑 `redis/redis-stack:latest` 最省事。
+- Linux：`sudo apt install redis-stack-server` 或 Docker。
+- macOS：`brew install redis-stack`
+
+验证 RediSearch 是否可用：
+
+```bash
+redis-cli FT._LIST
+# 不报错即表示模块已加载
+```
+
+#### RabbitMQ
+
+- Windows：推荐 [Docker](https://hub.docker.com/_/rabbitmq) 或安装 Erlang + RabbitMQ。
+- Linux：`sudo apt install rabbitmq-server`
+- macOS：`brew install rabbitmq`
+
+默认管理界面：`http://localhost:15672`（用户名/密码见 docker-compose 配置）。
+
+---
+
+## 四、获取项目代码
+
+```bash
+git clone <你的仓库地址>
+cd SamaraAI-v2
+```
+
+---
+
+## 五、配置后端 `etc/samara.yaml`
+
+### 5.1 复制配置文件
+
+```bash
+cp etc/samara.yaml.example etc/samara.yaml
+```
+
+> `etc/samara.yaml` 已在 `.gitignore` 中，**不会提交到 Git**，请放心填写密钥。
+
+### 5.2 逐项填写
+
+用任意文本编辑器打开 `etc/samara.yaml`，重点修改以下字段：
+
+```yaml
+# 开发环境用 dev，生产环境改为 prod
+Mode: dev
+
+Mysql:
+  Host: 127.0.0.1
+  Port: 3306
+  User: root
+  Password: "你的MySQL密码"
+  DatabaseName: SamaraAI
+
+Redis:
+  Host: 127.0.0.1
+  Port: 6379
+  Password: ""
+  Db: 0
+
+Rabbitmq:
+  Host: localhost
+  Port: 5672
+  Username: root
+  Password: "123456"
+  Vhost: /
+
+# QQ 邮箱（用于发送注册验证码，固定走 smtp.qq.com:587）
+Email:
+  Email: your-email@qq.com
+  Authcode: 你的QQ邮箱SMTP授权码
+
+# 阿里百炼（通义千问）— 对话和 RAG 默认使用
+OpenAI:
+  ApiKey: sk-xxxxxxxx
+  Model: qwen-plus
+  BaseUrl: https://dashscope.aliyuncs.com/compatible-mode/v1
+
+Rag:
+  EmbeddingModel: text-embedding-v4
+  ChatModelName: qwen-turbo
+  DocDir: ./docs
+  BaseUrl: https://dashscope.aliyuncs.com/compatible-mode/v1
+  Dimension: 1024
+```
+
+### 5.3 获取各项密钥
+
+| 配置项 | 获取方式 |
+|--------|----------|
+| **阿里百炼 ApiKey** | 登录 [阿里云百炼控制台](https://bailian.console.aliyun.com/) → API-KEY 管理 → 创建 |
+| **QQ 邮箱授权码** | QQ 邮箱 → 设置 → 账户 → POP3/SMTP → 开启服务 → 生成授权码 |
+| **DeepSeek ApiKey** | [https://platform.deepseek.com/](https://platform.deepseek.com/) 注册获取（可选） |
+| **百度 ApiKey** | [百度智能云](https://cloud.baidu.com/) 创建应用（可选） |
+
+### 5.4 Mode 说明
+
+| 值 | 含义 |
+|----|------|
+| `dev` | 开发模式：MySQL 打印 SQL 日志；JWT 支持 URL 参数 `?token=xxx` |
+| `prod` | 生产模式：关闭上述调试行为，**部署到服务器请改为 prod** |
+
+---
+
+## 六、准备可选资源
+
+### 6.1 RAG 知识库文档
+
+在项目根目录创建 `docs/` 文件夹，放入 `.txt` 或 `.md` 文档：
+
+```bash
+mkdir docs
+# 把知识库文件复制进去
+```
+
+上传文档通过前端页面上传，后端会写入 `docs/` 并建立 Redis 向量索引。
+
+### 6.2 图像识别模型（可选）
+
+如需使用图像识别，准备以下文件：
+
+```
+项目根目录/
+├── models/mobilenetv2/mobilenetv2-7.onnx   # ONNX 模型
+└── imagenet_classes.txt                     # ImageNet 1000 类标签
+```
+
+在 `etc/samara.yaml` 中配置路径：
+
+```yaml
+Image:
+  ModelPath: ./models/mobilenetv2/mobilenetv2-7.onnx
+  LabelPath: ./imagenet_classes.txt
+  InputH: 224
+  InputW: 224
+```
+
+模型可从 [ONNX Model Zoo](https://github.com/onnx/models) 下载 MobileNetV2；  
+标签文件可从 PyTorch 官方 `imagenet_classes.txt` 获取。
+
+---
+
+## 七、启动后端
+
+在项目根目录执行：
+
+```bash
+go mod download
+go run main.go -f etc/samara.yaml
+```
+
+看到类似输出表示成功：
+
+```
+redis init success
+rabbitmq init success
+AIHelperManager init success
+Starting SamaraAI at 0.0.0.0:9090...
+```
+
+后端 API 地址：`http://localhost:9090`
+
+### 常见启动失败
+
+| 报错 | 原因 | 解决 |
+|------|------|------|
+| `InitMysql error` | MySQL 连不上或库不存在 | 检查密码、端口、是否已 `CREATE DATABASE` |
+| `RabbitMQ connection failed` | RabbitMQ 未启动 | 启动 RabbitMQ 或检查账号密码 |
+| `redis init` 后 RAG 报错 `FT.CREATE` | Redis 没有 RediSearch | 换用 **redis-stack** 镜像 |
+| 邮件发送失败 | QQ 授权码错误 | 重新生成授权码，不要用 QQ 密码 |
+
+---
+
+## 八、启动前端（开发模式）
+
+```bash
+cd vue-frontend
+npm install
+npm run serve
+```
+
+浏览器打开：**http://localhost:8080**
+
+### 前端环境变量说明
+
+开发环境已配置 `vue-frontend/.env.development`：
+
+```
+VUE_APP_STREAM_BASE=http://localhost:9090/api/v1
+```
+
+- 普通 API 请求走 `vue.config.js` 代理（`/api` → 后端 `9090`）
+- **流式聊天（SSE）** 直连后端，避免代理缓冲导致卡顿
+
+---
+
+## 九、验证部署是否成功
+
+按顺序自测：
+
+1. **后端存活**：浏览器访问 `http://localhost:9090`（可能返回 404，说明服务在跑）
+2. **注册**：打开 `http://localhost:8080` → 注册 → 邮箱收到验证码
+3. **登录**：用注册的账号登录
+4. **AI 对话**：新建会话，发送消息，应看到流式输出
+5. **（可选）图像识别**：上传图片，返回分类结果
+6. **（可选）RAG**：上传文档后，对话中可检索知识库内容
+
+---
+
+## 十、生产环境部署（Linux 服务器）
+
+### 10.1 编译后端
+
+```bash
+# 在开发机上交叉编译（以 Linux amd64 为例）
+GOOS=linux GOARCH=amd64 go build -o samara-api main.go
+
+# 上传到服务器，连同以下文件：
+#   samara-api（二进制）
+#   etc/samara.yaml（Mode 改为 prod）
+#   docs/（如有 RAG 文档）
+#   models/、imagenet_classes.txt（如有图像识别）
+```
+
+服务器上运行：
+
+```bash
+chmod +x samara-api
+./samara-api -f etc/samara.yaml
+```
+
+建议用 **systemd** 托管（`/etc/systemd/system/samara.service`）：
+
+```ini
+[Unit]
+Description=SamaraAI API
+After=network.target mysql.service redis.service rabbitmq-server.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/samara
+ExecStart=/opt/samara/samara-api -f /opt/samara/etc/samara.yaml
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now samara
+```
+
+### 10.2 构建前端
+
+```bash
+cd vue-frontend
+
+# 创建生产环境变量（与后端同域部署时）
+echo "VUE_APP_STREAM_BASE=/api/v1" > .env.production
+
+npm install
+npm run build
+```
+
+构建产物在 `vue-frontend/dist/`，用 Nginx 托管。
+
+### 10.3 Nginx 反向代理示例
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    # 前端静态文件
+    root /opt/samara/vue-frontend/dist;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 普通 API 代理
+    location /api/ {
+        proxy_pass http://127.0.0.1:9090/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # SSE 流式接口（关闭缓冲）
+    location /api/v1/AI/chat/ {
+        proxy_pass http://127.0.0.1:9090/api/v1/AI/chat/;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        chunked_transfer_encoding on;
+    }
+}
+```
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### 10.4 生产环境检查清单
+
+- [ ] `etc/samara.yaml` 中 `Mode` 设为 `prod`
+- [ ] MySQL / Redis Stack / RabbitMQ 均已启动且密码已修改
+- [ ] 防火墙放行 80/443（后端 9090 建议只内网访问）
+- [ ] 配置 HTTPS（推荐 Let's Encrypt + certbot）
+- [ ] API Key、邮箱授权码等敏感信息不要提交到 Git
+
+---
+
+## 十一、端口一览
+
+| 服务 | 默认端口 |
+|------|----------|
+| 后端 API | 9090 |
+| 前端开发服务器 | 8080 |
+| MySQL | 3306 |
+| Redis | 6379 |
+| RabbitMQ | 5672 |
+| RabbitMQ 管理界面 | 15672 |
+
+---
+
+
+
+## 十二、相关文档
+
+- 项目简介与目录结构：见 [README.md](./README.md)
+- 配置模板：见 [etc/samara.yaml.example](./etc/samara.yaml.example)
+- API 路由定义：见 `internal/handler/routes.go`
+
+---
+
+如有问题，欢迎在项目 Issue 中反馈。

@@ -471,11 +471,17 @@ func (m *MCPModel) StreamResponse(ctx context.Context, messages []*schema.Messag
 	toolCall, err := m.parseAIResponse(aiResult)
 	if err != nil {
 		log.Printf("Failed to parse AI response: %v", err)
+		if aiResult != "" {
+			cb(aiResult)
+		}
 		return aiResult, nil
 	}
 
 	// 情况1：AI不调用工具，直接返回响应
 	if !toolCall.IsToolCall {
+		if aiResult != "" {
+			cb(aiResult)
+		}
 		return aiResult, nil
 	}
 
@@ -484,6 +490,9 @@ func (m *MCPModel) StreamResponse(ctx context.Context, messages []*schema.Messag
 	mcpClient, err := m.getMCPClient(ctx)
 	if err != nil {
 		log.Printf("MCP client error: %v", err)
+		if aiResult != "" {
+			cb(aiResult)
+		}
 		return aiResult, nil
 	}
 
@@ -491,6 +500,9 @@ func (m *MCPModel) StreamResponse(ctx context.Context, messages []*schema.Messag
 	toolResult, err := m.callMCPTool(ctx, mcpClient, toolCall.ToolName, toolCall.Args)
 	if err != nil {
 		log.Printf("MCP tool call failed: %v", err)
+		if aiResult != "" {
+			cb(aiResult)
+		}
 		return aiResult, nil
 	}
 

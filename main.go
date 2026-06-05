@@ -8,6 +8,7 @@ import (
 	"SamaraAI/dao/message"
 	"SamaraAI/internal/config"
 	"SamaraAI/internal/handler"
+	"SamaraAI/internal/middleware"
 	"SamaraAI/internal/svc"
 	"flag"
 	"fmt"
@@ -75,6 +76,8 @@ func main() {
 
 	server := rest.MustNewServer(c.RestConf)
 	defer server.Stop()
+
+	server.Use(middleware.NewCorsMiddleware().Handle)
 
 	ctx := svc.NewServiceContext(c)
 	handler.RegisterHandlers(server, ctx)

@@ -1,53 +1,59 @@
 <template>
-  <div class="image-recognition-container">
-    <!-- 左侧会话列表 -->
-    <div class="session-list">
-      <div class="session-list-header">
-        <span>图像识别</span>
+  <div class="chat-layout">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">S</div>
+        <span class="brand-name">SamaraAI</span>
       </div>
-      <ul class="session-list-ul">
-        <li class="session-item active">
-          图像识别助手
-        </li>
-      </ul>
-    </div>
-
-    <!-- 右侧聊天区域 -->
-    <div class="chat-section">
-      <div class="top-bar">
-        <button class="back-btn" @click="$router.push('/menu')">← 返回</button>
-        <h2>AI 图像识别助手</h2>
+      <nav class="nav-list">
+        <button class="nav-item active">图像识别</button>
+        <button class="nav-item" @click="$router.push('/ai-chat')">智能对话</button>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="footer-link" @click="$router.push('/menu')">应用中心</button>
       </div>
+    </aside>
 
-      <div class="chat-messages" ref="chatContainerRef">
-        <div
-          v-for="(message, index) in messages"
-          :key="index"
-          :class="['message', message.role === 'user' ? 'user-message' : 'ai-message']"
-        >
-          <div class="message-header">
-            <b>{{ message.role === 'user' ? '你' : 'AI' }}:</b>
-          </div>
-          <div class="message-content">
-            <span>{{ message.content }}</span>
-            <img v-if="message.imageUrl" :src="message.imageUrl" alt="上传的图片" />
+    <main class="main-panel">
+      <header class="main-header">
+        <h2>图像识别</h2>
+      </header>
+
+      <div class="messages-wrap" ref="chatContainerRef">
+        <div v-if="messages.length === 0" class="welcome">
+          <div class="welcome-logo">🖼</div>
+          <h2>上传图片进行识别</h2>
+          <p>支持常见图片格式，AI 将返回分类结果</p>
+        </div>
+
+        <div v-else class="messages-inner">
+          <div
+            v-for="(message, index) in messages"
+            :key="index"
+            :class="['msg-row', message.role === 'user' ? 'msg-row-user' : 'msg-row-ai']"
+          >
+            <div class="avatar" :class="message.role">{{ message.role === 'user' ? '你' : 'AI' }}</div>
+            <div class="msg-body">
+              <div v-if="message.role === 'user'" class="user-content">{{ message.content }}</div>
+              <div v-else class="ai-content">{{ message.content }}</div>
+              <img v-if="message.imageUrl" :src="message.imageUrl" class="preview-img" alt="preview" />
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="chat-input">
-        <form @submit.prevent="handleSubmit">
-          <input
-            ref="fileInputRef"
-            type="file"
-            accept="image/*"
-            required
-            @change="handleFileSelect"
-          />
-          <button type="submit" :disabled="!selectedFile">发送图片</button>
-        </form>
+      <div class="composer-wrap">
+        <div class="upload-box">
+          <input ref="fileInputRef" type="file" accept="image/*" hidden @change="handleFileSelect" />
+          <button type="button" class="pick-btn" @click="fileInputRef?.click()">
+            {{ selectedFile ? selectedFile.name : '选择图片' }}
+          </button>
+          <button type="button" class="send-btn-wide" :disabled="!selectedFile" @click="handleSubmit">
+            开始识别
+          </button>
+        </div>
       </div>
-    </div>
+    </main>
   </div>
 </template>
 
@@ -63,8 +69,8 @@ export default {
     const fileInputRef = ref()
     const chatContainerRef = ref()
 
-    const handleFileSelect = (event) => {
-      selectedFile.value = event.target.files[0]
+    const handleFileSelect = (e) => {
+      selectedFile.value = e.target.files?.[0] || null
     }
 
     const handleSubmit = async () => {
@@ -73,58 +79,35 @@ export default {
       const file = selectedFile.value
       const imageUrl = URL.createObjectURL(file)
 
-      // Add user message to UI
       messages.value.push({
         role: 'user',
-        content: `已上传图片: ${file.name}`,
-        imageUrl: imageUrl,
+        content: `已上传：${file.name}`,
+        imageUrl
       })
 
       await nextTick()
       scrollToBottom()
 
-      // Create FormData
       const formData = new FormData()
       formData.append('image', file)
 
       try {
         const response = await api.post('/image/recognize', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
+          headers: { 'Content-Type': 'multipart/form-data' }
         })
-
-
-        if (response.data && response.data.class_name) {
-             const aiText = `识别结果: ${response.data.class_name}`
-            messages.value.push({
-                role: 'assistant',
-                content: aiText,
-            })
+        if (response.data?.class_name) {
+          messages.value.push({ role: 'assistant', content: `识别结果：${response.data.class_name}` })
         } else {
-             messages.value.push({
-                 role: 'assistant',
-                 content: `[错误] ${response.data.status_msg || '识别失败'}`,
-             })
+          messages.value.push({ role: 'assistant', content: response.data?.status_msg || '识别失败' })
         }
       } catch (error) {
-        console.error('Upload error:', error)
-        messages.value.push({
-          role: 'assistant',
-          content: `[错误] 无法连接到服务器或上传失败: ${error.message}`,
-        })
+        messages.value.push({ role: 'assistant', content: `请求失败：${error.message}` })
       } finally {
-
         URL.revokeObjectURL(imageUrl)
-
-            await nextTick()
-        scrollToBottom()
-
-
         selectedFile.value = null
-        if (fileInputRef.value) {
-          fileInputRef.value.value = ''
-        }
+        if (fileInputRef.value) fileInputRef.value.value = ''
+        await nextTick()
+        scrollToBottom()
       }
     }
 
@@ -147,316 +130,248 @@ export default {
 </script>
 
 <style scoped>
-.image-recognition-container {
+.chat-layout {
+  display: flex;
   height: 100vh;
-  display: flex;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  position: relative;
-  overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  color: #222;
+  background: var(--ds-bg);
 }
 
-.image-recognition-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="2" fill="rgba(255,255,255,0.08)"/><circle cx="80" cy="80" r="2" fill="rgba(255,255,255,0.08)"/><circle cx="40" cy="60" r="1" fill="rgba(255,255,255,0.06)"/><circle cx="60" cy="30" r="1.5" fill="rgba(255,255,255,0.06)"/></svg>');
-  animation: float 20s ease-in-out infinite;
-  opacity: 0.25;
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0px) rotate(0deg); }
-  50% { transform: translateY(-20px) rotate(180deg); }
-}
-
-.session-list {
-  width: 280px;
-  height: 100vh;
-  overflow: hidden;
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(15px);
-  border-right: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 2px 0 20px rgba(0, 0, 0, 0.08);
-  position: relative;
-  z-index: 2;
+  background: var(--ds-sidebar);
+  border-right: 1px solid var(--ds-border);
 }
 
-.session-list-header {
-  padding: 20px;
-  text-align: center;
-  font-weight: 600;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.06) 0%, rgba(103, 194, 58, 0.06) 100%);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-.session-list-ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  flex: 1;
-  overflow-y: auto;
-}
-
-.session-item {
-  padding: 15px 20px;
-  cursor: pointer;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
-  transition: all 0.2s ease;
-  position: relative;
-  color: #2c3e50;
-}
-
-.session-item.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  font-weight: 600;
-  box-shadow: inset 0 0 20px rgba(102, 126, 234, 0.2);
-}
-
-/* chat section */
-.chat-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  z-index: 1;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.top-bar {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  color: #2c3e50;
-  display: flex;
-  align-items: center;
-  padding: 12px 24px;
-  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.06);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  gap: 12px;
-}
-
-.back-btn {
-  background: rgba(255, 255, 255, 0.22);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  color: #2c3e50;
-  padding: 8px 14px;
-  border-radius: 10px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.back-btn:hover {
-  background: rgba(255, 255, 255, 0.32);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
-}
-
-.top-bar h2 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-}
-
-.chat-messages {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 30px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  position: relative;
-  z-index: 1;
-}
-
-/* scrollbar */
-.chat-messages::-webkit-scrollbar {
-  width: 8px;
-}
-.chat-messages::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.12);
-  border-radius: 8px;
-}
-.chat-messages::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.message {
-  max-width: 70%;
-  padding: 14px 18px;
-  border-radius: 18px;
-  line-height: 1.6;
-  word-wrap: break-word;
-  position: relative;
-  animation: messageSlideIn 0.28s ease-out;
-  font-size: 15px;
-  box-sizing: border-box;
-}
-
-@keyframes messageSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.user-message {
-  align-self: flex-end;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.16);
-}
-
-.user-message::after {
-  content: '';
-  position: absolute;
-  bottom: -6px;
-  right: 18px;
-  width: 0;
-  height: 0;
-  border-left: 8px solid transparent;
-  border-right: 8px solid transparent;
-  border-top: 8px solid #764ba2;
-}
-
-.ai-message {
-  align-self: flex-start;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(4px);
-  color: #2c3e50;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.ai-message::after {
-  content: '';
-  position: absolute;
-  bottom: -6px;
-  left: 18px;
-  width: 0;
-  height: 0;
-  border-left: 8px solid transparent;
-  border-right: 8px solid transparent;
-  border-top: 8px solid rgba(255, 255, 255, 0.95);
-}
-
-.message-header {
+.sidebar-brand {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 20px 16px;
+}
+
+.brand-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--ds-primary);
+  color: #fff;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-name {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.nav-list {
+  padding: 8px;
+  flex: 1;
+}
+
+.nav-item {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--ds-text);
+}
+
+.nav-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.nav-item.active {
+  background: var(--ds-bg);
+  font-weight: 500;
+  box-shadow: var(--ds-shadow);
+}
+
+.sidebar-footer {
+  padding: 12px;
+  border-top: 1px solid var(--ds-border);
+}
+
+.footer-link {
+  width: 100%;
+  padding: 8px;
+  border: none;
+  background: none;
+  color: var(--ds-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.main-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.main-header {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--ds-border);
+}
+
+.main-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.messages-wrap {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 16px;
+}
+
+.welcome {
+  max-width: 400px;
+  margin: 80px auto 0;
+  text-align: center;
+}
+
+.welcome-logo {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.welcome h2 {
+  font-size: 20px;
   margin-bottom: 8px;
 }
 
-.message-header b {
-  font-weight: 600;
-}
-
-/* message content */
-.message-content {
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.message-content img {
-  max-width: 250px;
-  border-radius: 12px;
-  display: block;
-  margin-top: 12px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
-}
-
-.message-content img:hover {
-  transform: scale(1.05);
-}
-
-/* input area */
-.chat-input {
-  padding: 24px;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(8px);
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
-  position: relative;
-  z-index: 1;
-}
-
-.chat-input form {
-  display: flex;
-  gap: 20px;
-}
-
-.chat-input input[type="file"] {
-  flex: 1;
-  border: 2px dashed #d9d9d9;
-  border-radius: 12px;
-  padding: 15px 20px;
-  background: rgba(255, 255, 255, 0.8);
-  color: #666;
-  cursor: pointer;
-  transition: all 0.3s ease;
+.welcome p {
+  color: var(--ds-text-secondary);
   font-size: 14px;
 }
 
-.chat-input input[type="file"]:hover {
-  border-color: #409eff;
-  background: rgba(64, 158, 255, 0.05);
+.messages-inner {
+  max-width: 768px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
-.chat-input input[type="file"]::file-selector-button {
-  border: none;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 8px 16px;
+.msg-row {
+  display: flex;
+  gap: 14px;
+  max-width: 768px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.msg-row-user {
+  flex-direction: row-reverse;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
   border-radius: 8px;
-  color: white;
-  cursor: pointer;
+  font-size: 11px;
   font-weight: 600;
-  margin-right: 12px;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.chat-input input[type="file"]::file-selector-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+.avatar.user {
+  background: var(--ds-primary);
+  color: #fff;
 }
 
-.chat-input button {
-  padding: 15px 30px;
+.avatar.assistant {
+  background: #f0f0f0;
+  color: #666;
+}
+
+.msg-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.msg-row-user .msg-body {
+  text-align: right;
+}
+
+.user-content {
+  display: inline-block;
+  padding: 10px 16px;
+  background: var(--ds-user-bubble);
+  border-radius: 16px;
+  font-size: 15px;
+}
+
+.ai-content {
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.preview-img {
+  max-width: 280px;
+  margin-top: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--ds-border);
+}
+
+.composer-wrap {
+  padding: 16px 24px 24px;
+  border-top: 1px solid var(--ds-border);
+}
+
+.upload-box {
+  max-width: 768px;
+  margin: 0 auto;
+  display: flex;
+  gap: 12px;
+}
+
+.pick-btn {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px dashed var(--ds-border);
+  border-radius: 12px;
+  background: var(--ds-bg-muted);
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--ds-text-secondary);
+}
+
+.pick-btn:hover {
+  border-color: var(--ds-primary);
+}
+
+.send-btn-wide {
+  padding: 12px 24px;
   border: none;
   border-radius: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  font-size: 16px;
-  font-weight: 600;
+  background: var(--ds-primary);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
 }
 
-.chat-input button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-}
-
-.chat-input button:disabled {
+.send-btn-wide:disabled {
   background: #ccc;
-  box-shadow: none;
   cursor: not-allowed;
-  transform: none;
 }
 </style>

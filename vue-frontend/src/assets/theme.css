@@ -1,0 +1,15 @@
+:root {
+  --ds-bg: #ffffff;
+  --ds-bg-muted: #f7f8fa;
+  --ds-sidebar: #f4f5f7;
+  --ds-border: #e8e8e8;
+  --ds-text: #1a1a1a;
+  --ds-text-secondary: #8b8b8b;
+  --ds-primary: #4d6bfe;
+  --ds-primary-hover: #3d5ae8;
+  --ds-user-bubble: #edf3fe;
+  --ds-radius: 12px;
+  --ds-radius-lg: 20px;
+  --ds-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --ds-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}

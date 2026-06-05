@@ -70,6 +70,8 @@ func StreamMessageToExistingSession(ctx context.Context, userName, sessionID, us
 		return code.AIModelFail
 	}
 
+	sse.WriteComment(writer, flusher, "connected")
+
 	cb := func(msg string) {
 		if ctx.Err() != nil {
 			return

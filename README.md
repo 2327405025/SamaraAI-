@@ -45,6 +45,7 @@ npm install
 npm run serve
 ```
 
+cmd /c "cd /d d:\Gocode\SamaraAI-v2\vue-frontend && npm run serve"
 ## 目录结构
 
 ```
