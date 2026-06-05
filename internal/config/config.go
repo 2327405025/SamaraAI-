@@ -13,8 +13,10 @@ type Config struct {
 	Jwt   JwtConf   `json:",optional"`
 	Rabbitmq RabbitmqConf `json:",optional"`
 	Rag   RagConf   `json:",optional"`
-	OpenAI OpenAIConf `json:",optional"`
-	Image ImageConf `json:",optional"`
+	OpenAI   OpenAIConf   `json:",optional"`   // 阿里百炼（DashScope 兼容模式）
+	DeepSeek DeepSeekConf `json:",optional"`
+	Baidu    BaiduConf    `json:",optional"`
+	Image    ImageConf    `json:",optional"`
 	AiHelper AiHelperConf `json:",optional"`
 }
 
@@ -70,6 +72,17 @@ type OpenAIConf struct {
 	ApiKey  string `json:",optional"`
 	Model   string `json:",optional"`
 	BaseUrl string `json:",optional"`
+}
+
+type DeepSeekConf struct {
+	ApiKey  string `json:",optional"`
+	Model   string `json:",optional"`
+	BaseUrl string `json:",optional"`
+}
+
+type BaiduConf struct {
+	ApiKey    string `json:",optional"`
+	SecretKey string `json:",optional"`
 }
 
 type ImageConf struct {

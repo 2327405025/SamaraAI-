@@ -45,9 +45,18 @@ Rag:
   Dimension: 1024
 
 OpenAI:
-  ApiKey: your-api-key
+  ApiKey: your-ali-dashscope-api-key
   Model: qwen-plus
   BaseUrl: https://dashscope.aliyuncs.com/compatible-mode/v1
+
+DeepSeek:
+  ApiKey: your-deepseek-api-key
+  Model: deepseek-chat
+  BaseUrl: https://api.deepseek.com/v1
+
+Baidu:
+  ApiKey: your-baidu-api-key
+  SecretKey: your-baidu-secret-key
 
 AiHelper:
   MaxSessionsPerUser: 50
