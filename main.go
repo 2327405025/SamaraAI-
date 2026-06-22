@@ -2,6 +2,7 @@ package main
 
 import (
 	"SamaraAI/common/aihelper"
+	mcpserver "SamaraAI/common/mcp/server"
 	"SamaraAI/common/mysql"
 	"SamaraAI/common/rabbitmq"
 	"SamaraAI/common/redis"
@@ -73,6 +74,19 @@ func main() {
 	log.Println("redis init success")
 	rabbitmq.InitRabbitMQ()
 	log.Println("rabbitmq init success")
+
+	if c.Mcp.Enabled {
+		addr := c.Mcp.Addr
+		if addr == "" {
+			addr = ":8081"
+		}
+		go func() {
+			log.Printf("MCP server starting at %s/mcp", addr)
+			if err := mcpserver.StartServer(addr); err != nil {
+				log.Fatalf("MCP server error: %v", err)
+			}
+		}()
+	}
 
 	server := rest.MustNewServer(c.RestConf)
 	defer server.Stop()

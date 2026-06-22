@@ -333,7 +333,10 @@ func NewMCPModel(ctx context.Context, username string) (*MCPModel, error) {
 		return nil, fmt.Errorf("create mcp model failed: %v", err)
 	}
 
-	mcpBaseURL := "http://localhost:8081/mcp"
+	mcpBaseURL := conf.Mcp.BaseURL
+	if mcpBaseURL == "" {
+		mcpBaseURL = "http://localhost:8081/mcp"
+	}
 
 	return &MCPModel{
 		llm:        llm,
@@ -586,15 +589,27 @@ func (m *MCPModel) buildSecondPrompt(query, toolName string, args map[string]int
 
 // parseAIResponse 解析AI响应，检查是否包含工具调用
 func (m *MCPModel) parseAIResponse(response string) (*AIToolCall, error) {
-	// 尝试解析为JSON
+	response = strings.TrimSpace(response)
+	if strings.HasPrefix(response, "```") {
+		lines := strings.Split(response, "\n")
+		if len(lines) >= 2 {
+			start := 1
+			end := len(lines) - 1
+			if strings.HasPrefix(lines[len(lines)-1], "```") {
+				response = strings.Join(lines[start:end], "\n")
+			}
+		}
+	}
+
 	var toolCall AIToolCall
-	if err := json.Unmarshal([]byte(response), &toolCall); err == nil {
+	if err := json.Unmarshal([]byte(response), &toolCall); err == nil && (toolCall.IsToolCall || toolCall.ToolName != "") {
+		if toolCall.ToolName != "" {
+			toolCall.IsToolCall = true
+		}
 		return &toolCall, nil
 	}
 
-	// 如果不是JSON，检查是否包含工具调用关键词
 	if strings.Contains(response, "get_weather") {
-		// 尝试提取城市名称
 		city := m.extractCityFromResponse(response)
 		if city != "" {
 			return &AIToolCall{
@@ -605,7 +620,6 @@ func (m *MCPModel) parseAIResponse(response string) (*AIToolCall, error) {
 		}
 	}
 
-	// 不是工具调用
 	return &AIToolCall{IsToolCall: false}, nil
 }
 

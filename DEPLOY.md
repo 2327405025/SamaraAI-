@@ -250,26 +250,76 @@ Rag:
 
 ### 6.1 RAG 知识库文档
 
-在项目根目录创建 `docs/` 文件夹，放入 `.txt` 或 `.md` 文档：
+RAG 文档通过**前端聊天页上传**（支持 `.txt` / `.md`），后端会：
 
-```bash
-mkdir docs
-# 把知识库文件复制进去
-```
+1. 保存到 `uploads/{用户名}/`（可在 `etc/samara.yaml` 的 `Rag.UploadDir` 配置）
+2. 按 **800 字切块**（可配置 `ChunkSize` / `ChunkOverlap`）并向量化
+3. 写入 **Redis Stack** 向量索引（每份文件独立索引，检索时合并 Top-K）
 
-上传文档通过前端页面上传，后端会写入 `docs/` 并建立 Redis 向量索引。
+默认每用户最多保留 **5 份**文档（`Rag.MaxFilesPerUser`），超出会自动删除最早上传的文件。
+
+**前置条件**：Redis 必须使用 **redis-stack**（带 RediSearch），普通 `redis:latest` 不支持 `FT.CREATE`。
+
+使用方式：
+
+1. 在 AI 聊天页点击上传文档
+2. 模型切换为 **「RAG 知识库」**
+3. 针对文档内容提问
 
 ### 6.2 图像识别模型（可选）
 
-如需使用图像识别，准备以下文件：
+如需使用图像识别，先下载模型与标签文件。
+
+#### 方式 A：一键脚本（推荐）
+
+**Windows PowerShell**（在项目根目录）：
+
+```powershell
+.\scripts\download-models.ps1
+```
+
+**Linux / macOS / Git Bash**：
+
+```bash
+bash scripts/download-models.sh
+```
+
+#### 方式 B：手动下载
+
+| 文件 | 大小 | 官方来源 | 直接下载链接 |
+|------|------|----------|--------------|
+| `mobilenetv2-7.onnx` | ~14 MB | [Hugging Face ONNX Model Zoo](https://huggingface.co/onnxmodelzoo/mobilenetv2-7) | https://huggingface.co/onnxmodelzoo/mobilenetv2-7/resolve/main/mobilenetv2-7.onnx |
+| `imagenet_classes.txt` | ~30 KB | [PyTorch Hub](https://github.com/pytorch/hub/blob/master/imagenet_classes.txt) | https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt |
+
+**PowerShell 手动命令**：
+
+```powershell
+mkdir models\mobilenetv2 -Force
+Invoke-WebRequest -Uri "https://huggingface.co/onnxmodelzoo/mobilenetv2-7/resolve/main/mobilenetv2-7.onnx" -OutFile "models\mobilenetv2\mobilenetv2-7.onnx"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt" -OutFile "imagenet_classes.txt"
+```
+
+**Linux / macOS 手动命令**：
+
+```bash
+mkdir -p models/mobilenetv2
+curl -L -o models/mobilenetv2/mobilenetv2-7.onnx \
+  https://huggingface.co/onnxmodelzoo/mobilenetv2-7/resolve/main/mobilenetv2-7.onnx
+curl -L -o imagenet_classes.txt \
+  https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt
+```
+
+> GitHub 上的 [ONNX Model Zoo 原仓库](https://github.com/onnx/models/tree/main/validated/vision/classification/mobilenet/model) 使用 Git LFS，直接 `wget` 原始链接会得到 LFS 指针而非模型文件，建议使用上方 Hugging Face 链接。
+
+下载完成后目录结构：
 
 ```
 项目根目录/
-├── models/mobilenetv2/mobilenetv2-7.onnx   # ONNX 模型
-└── imagenet_classes.txt                     # ImageNet 1000 类标签
+├── models/mobilenetv2/mobilenetv2-7.onnx
+└── imagenet_classes.txt
 ```
 
-在 `etc/samara.yaml` 中配置路径：
+在 `etc/samara.yaml` 中确认路径：
 
 ```yaml
 Image:
@@ -279,8 +329,34 @@ Image:
   InputW: 224
 ```
 
-模型可从 [ONNX Model Zoo](https://github.com/onnx/models) 下载 MobileNetV2；  
-标签文件可从 PyTorch 官方 `imagenet_classes.txt` 获取。
+### 6.3 MCP 工具服务（可选）
+
+MCP 提供外部工具调用能力（当前内置 **天气查询** `get_weather`，数据源 [wttr.in](https://wttr.in)）。
+
+默认已随主程序自动启动，在 `etc/samara.yaml` 中配置：
+
+```yaml
+Mcp:
+  Enabled: true          # 设为 false 可关闭
+  Addr: ":8081"          # MCP HTTP 监听地址
+  BaseURL: http://localhost:8081/mcp
+```
+
+启动后端后日志应出现：
+
+```
+MCP server starting at :8081/mcp
+HTTP MCP server listening on :8081/mcp
+```
+
+使用方式：AI 聊天页选择 **「MCP 工具」**，提问如「北京今天天气怎么样」。
+
+也可单独调试 MCP 服务：
+
+```bash
+go run ./common/mcp -mode server -http-addr :8081
+go run ./common/mcp -mode client -http-addr :8081 -city 北京
+```
 
 ---
 
@@ -293,13 +369,26 @@ go mod download
 go run main.go -f etc/samara.yaml
 ```
 
+**Windows 注意（图像识别 / CGO）**：若用户名含中文等非 ASCII 字符，`go run` 可能报 `runtime/cgo ... can't create ... Temp` 错误。请先设置纯英文临时目录：
+
+```powershell
+$env:GOTMPDIR="D:\Gocode\tmp"
+$env:GOCACHE="D:\Gocode\gocache"
+New-Item -ItemType Directory -Force -Path $env:GOTMPDIR, $env:GOCACHE | Out-Null
+go run main.go -f etc/samara.yaml
+```
+
+若暂时不用图像识别，可跳过 gcc 安装；普通 AI 对话 / RAG / MCP 不依赖 CGO。
+
 看到类似输出表示成功：
 
 ```
 redis init success
 rabbitmq init success
+MCP server starting at :8081/mcp
 AIHelperManager init success
 Starting SamaraAI at 0.0.0.0:9090...
+HTTP MCP server listening on :8081/mcp
 ```
 
 后端 API 地址：`http://localhost:9090`
@@ -311,6 +400,9 @@ Starting SamaraAI at 0.0.0.0:9090...
 | `InitMysql error` | MySQL 连不上或库不存在 | 检查密码、端口、是否已 `CREATE DATABASE` |
 | `RabbitMQ connection failed` | RabbitMQ 未启动 | 启动 RabbitMQ 或检查账号密码 |
 | `redis init` 后 RAG 报错 `FT.CREATE` | Redis 没有 RediSearch | 换用 **redis-stack** 镜像 |
+| `runtime/cgo ... can't create ... Temp` | Windows 用户名含中文，MinGW 无法写临时目录 | 设置 `GOTMPDIR` / `GOCACHE` 到英文路径（见上文） |
+| MCP 工具无响应 | MCP 服务未启动或端口被占用 | 确认 `Mcp.Enabled: true`，日志有 `8081/mcp` |
+| 图像识别返回 500 | 模型文件不存在 | 运行 `scripts/download-models.ps1` 并检查 `Image` 配置 |
 | 邮件发送失败 | QQ 授权码错误 | 重新生成授权码，不要用 QQ 密码 |
 
 ---
@@ -321,6 +413,16 @@ Starting SamaraAI at 0.0.0.0:9090...
 cd vue-frontend
 npm install
 npm run serve
+```
+
+**Windows PowerShell** 若报「禁止运行脚本」，可任选其一：
+
+```powershell
+# 方式 1：临时改用 npm.cmd
+npm.cmd run serve
+
+# 方式 2：放宽当前用户执行策略（推荐，只需一次）
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
 浏览器打开：**http://localhost:8080**
@@ -346,8 +448,9 @@ VUE_APP_STREAM_BASE=http://localhost:9090/api/v1
 2. **注册**：打开 `http://localhost:8080` → 注册 → 邮箱收到验证码
 3. **登录**：用注册的账号登录
 4. **AI 对话**：新建会话，发送消息，应看到流式输出
-5. **（可选）图像识别**：上传图片，返回分类结果
-6. **（可选）RAG**：上传文档后，对话中可检索知识库内容
+5. **（可选）图像识别**：先下载模型（见 6.2 节），上传图片，返回 ImageNet 分类结果
+6. **（可选）RAG**：上传文档 → 切换「RAG 知识库」→ 针对文档提问
+7. **（可选）MCP**：切换「MCP 工具」→ 问「上海今天天气怎么样」
 
 ---
 

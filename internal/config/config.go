@@ -13,6 +13,7 @@ type Config struct {
 	Jwt   JwtConf   `json:",optional"`
 	Rabbitmq RabbitmqConf `json:",optional"`
 	Rag   RagConf   `json:",optional"`
+	Mcp   McpConf   `json:",optional"`
 	OpenAI   OpenAIConf   `json:",optional"`   // 阿里百炼（DashScope 兼容模式）
 	DeepSeek DeepSeekConf `json:",optional"`
 	Baidu    BaiduConf    `json:",optional"`
@@ -61,11 +62,21 @@ type RabbitmqConf struct {
 }
 
 type RagConf struct {
-	EmbeddingModel string `json:",optional"`
-	ChatModelName  string `json:",optional"`
-	DocDir         string `json:",optional"`
-	BaseUrl        string `json:",optional"`
-	Dimension      int    `json:",optional"`
+	EmbeddingModel  string `json:",optional"`
+	ChatModelName   string `json:",optional"`
+	DocDir          string `json:",optional"`
+	UploadDir       string `json:",optional"`
+	ChunkSize       int    `json:",optional"`
+	ChunkOverlap    int    `json:",optional"`
+	MaxFilesPerUser int    `json:",optional"`
+	BaseUrl         string `json:",optional"`
+	Dimension       int    `json:",optional"`
+}
+
+type McpConf struct {
+	Enabled bool   `json:",optional"`
+	Addr    string `json:",optional"`
+	BaseURL string `json:",optional"`
 }
 
 type OpenAIConf struct {

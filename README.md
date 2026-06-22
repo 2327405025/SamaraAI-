@@ -4,12 +4,13 @@ SamaraAI 是一个基于 Go（go-zero）与 Vue 3 的全栈 AI 应用平台，�
 
 ## 功能
 
-- AI 多轮对话（支持流式输出）
-- 图像识别
+- AI 多轮对话（支持流式输出，默认普通模式；可选 RAG / MCP）
+- 图像识别（MobileNetV2 + ImageNet，需下载模型，见 `DEPLOY.md` 6.2 节）
 - 用户注册 / 登录 / 验证码
 - 会话与历史消息管理
-- Redis、RabbitMQ、MySQL 集成
-- RAG 文档检索增强
+- Redis Stack、RabbitMQ、MySQL 集成
+- RAG 文档检索增强（上传 `.txt`/`.md`，聊天页切换「RAG 知识库」）
+- MCP 工具调用（默认随主程序启动，聊天页切换「MCP 工具」）
 
 ## 技术栈
 
@@ -31,11 +32,20 @@ cp etc/samara.yaml.example etc/samara.yaml
 
 聊天仅支持 SSE 流式接口：`/api/v1/AI/chat/send-stream`、`/api/v1/AI/chat/send-stream-new-session`（见 `api/samara.api` 顶部注释）。
 
-### 2. 启动后端
+### 2. 启动后端（完成redis rabbitmq mysql配置）
 
 ```bash
+go mod download
 go run main.go -f etc/samara.yaml
 ```
+
+**（可选）图像识别模型下载**（Windows）：
+
+```powershell
+.\scripts\download-models.ps1
+```
+
+详见 [DEPLOY.md](./DEPLOY.md) 第六节。
 
 ### 3. 启动前端
 
@@ -45,7 +55,6 @@ npm install
 npm run serve
 ```
 
-cmd /c "cd /d d:\Gocode\SamaraAI-v2\vue-frontend && npm run serve"
 ## 目录结构
 
 ```

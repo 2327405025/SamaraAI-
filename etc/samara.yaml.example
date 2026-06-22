@@ -41,8 +41,17 @@ Rag:
   EmbeddingModel: text-embedding-v4
   ChatModelName: qwen-turbo
   DocDir: ./docs
+  UploadDir: ./uploads
+  ChunkSize: 800
+  ChunkOverlap: 100
+  MaxFilesPerUser: 5
   BaseUrl: https://dashscope.aliyuncs.com/compatible-mode/v1
   Dimension: 1024
+
+Mcp:
+  Enabled: true
+  Addr: ":8081"
+  BaseURL: http://localhost:8081/mcp
 
 OpenAI:
   ApiKey: your-ali-dashscope-api-key

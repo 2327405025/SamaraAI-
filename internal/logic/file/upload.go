@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 func UploadRagFile(username string, file *multipart.FileHeader) (string, error) {
@@ -18,24 +19,13 @@ func UploadRagFile(username string, file *multipart.FileHeader) (string, error) 
 		return "", err
 	}
 
-	userDir := filepath.Join("uploads", username)
+	userDir := rag.UserUploadDir(username)
 	if err := os.MkdirAll(userDir, 0755); err != nil {
 		log.Printf("Failed to create user directory %s: %v", userDir, err)
 		return "", err
 	}
 
-	files, err := os.ReadDir(userDir)
-	if err == nil {
-		for _, f := range files {
-			if !f.IsDir() {
-				if err := rag.DeleteIndex(context.Background(), f.Name()); err != nil {
-					log.Printf("Failed to delete index for %s: %v", f.Name(), err)
-				}
-			}
-		}
-	}
-	if err := utils.RemoveAllFilesInDir(userDir); err != nil {
-		log.Printf("Failed to clean user directory %s: %v", userDir, err)
+	if err := trimUserFiles(username, userDir); err != nil {
 		return "", err
 	}
 
@@ -72,4 +62,52 @@ func UploadRagFile(username string, file *multipart.FileHeader) (string, error) 
 	}
 
 	return filePath, nil
+}
+
+func trimUserFiles(username string, userDir string) error {
+	maxFiles := config.Get().Rag.MaxFilesPerUser
+	if maxFiles <= 0 {
+		maxFiles = 5
+	}
+
+	entries, err := os.ReadDir(userDir)
+	if err != nil {
+		return nil
+	}
+
+	type fileEntry struct {
+		name    string
+		modTime int64
+	}
+	var files []fileEntry
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		files = append(files, fileEntry{name: e.Name(), modTime: info.ModTime().Unix()})
+	}
+
+	if len(files) < maxFiles {
+		return nil
+	}
+
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].modTime < files[j].modTime
+	})
+
+	toRemove := len(files) - maxFiles + 1
+	for i := 0; i < toRemove; i++ {
+		name := files[i].name
+		if err := rag.DeleteIndex(context.Background(), name); err != nil {
+			log.Printf("Failed to delete index for %s: %v", name, err)
+		}
+		if err := os.Remove(filepath.Join(userDir, name)); err != nil {
+			log.Printf("Failed to remove file %s for user %s: %v", name, username, err)
+		}
+	}
+	return nil
 }
