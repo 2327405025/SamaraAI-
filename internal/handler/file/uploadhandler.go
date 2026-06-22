@@ -31,12 +31,16 @@ func UploadRagFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filePath, err := filelogic.UploadRagFile(username, header)
+	storedName, displayName, err := filelogic.UploadRagFile(username, header)
 	if err != nil {
 		log.Println("UploadFile fail", err)
 		httpx.OkJson(w, resp.Base(code.CodeServerBusy))
 		return
 	}
 
-	httpx.OkJson(w, types.UploadFileResp{BaseResp: resp.Success(), FilePath: filePath})
+	httpx.OkJson(w, types.UploadFileResp{
+		BaseResp: resp.Success(),
+		FileId:   storedName,
+		FileName: displayName,
+	})
 }

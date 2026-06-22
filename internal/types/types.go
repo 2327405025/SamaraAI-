@@ -20,6 +20,14 @@ type ChatHistoryReq struct {
 	SessionId string `json:"sessionId"`
 }
 
+type DeleteSessionReq struct {
+	SessionId string `json:"sessionId"`
+}
+
+type DeleteSessionResp struct {
+	BaseResp
+}
+
 type ChatHistoryResp struct {
 	BaseResp
 	History []HistoryItem `json:"history,optional"`
@@ -80,4 +88,24 @@ type SessionInfo struct {
 type UploadFileResp struct {
 	BaseResp
 	FilePath string `json:"file_path,optional"`
+	FileId   string `json:"file_id,optional"`
+	FileName string `json:"file_name,optional"`
+}
+
+type RagFileInfo struct {
+	FileId   string `json:"fileId"`
+	FileName string `json:"fileName"`
+}
+
+type ListRagFilesResp struct {
+	BaseResp
+	Files []RagFileInfo `json:"files,optional"`
+}
+
+type DeleteRagFileReq struct {
+	FileId string `json:"fileId"`
+}
+
+type DeleteRagFileResp struct {
+	BaseResp
 }

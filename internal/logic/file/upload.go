@@ -11,57 +11,66 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
-func UploadRagFile(username string, file *multipart.FileHeader) (string, error) {
+func UploadRagFile(username string, file *multipart.FileHeader) (storedName string, displayName string, err error) {
 	if err := utils.ValidateFile(file); err != nil {
 		log.Printf("File validation failed: %v", err)
-		return "", err
+		return "", "", err
 	}
 
 	userDir := rag.UserUploadDir(username)
 	if err := os.MkdirAll(userDir, 0755); err != nil {
 		log.Printf("Failed to create user directory %s: %v", userDir, err)
-		return "", err
+		return "", "", err
 	}
 
 	if err := trimUserFiles(username, userDir); err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	ext := filepath.Ext(file.Filename)
+	displayName = filepath.Base(file.Filename)
+	ext := filepath.Ext(displayName)
 	filename := utils.GenerateUUID() + ext
 	filePath := filepath.Join(userDir, filename)
 
 	src, err := file.Open()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer src.Close()
 
 	dst, err := os.Create(filePath)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer dst.Close()
 
 	if _, err := io.Copy(dst, src); err != nil {
-		return "", err
+		return "", "", err
+	}
+
+	if err := rag.SaveFileDisplayName(username, filename, displayName); err != nil {
+		os.Remove(filePath)
+		return "", "", err
 	}
 
 	indexer, err := rag.NewRAGIndexer(filename, config.Get().Rag.EmbeddingModel)
 	if err != nil {
 		os.Remove(filePath)
-		return "", err
+		rag.RemoveFileDisplayName(username, filename)
+		return "", "", err
 	}
 
 	if err := indexer.IndexFile(context.Background(), filePath); err != nil {
 		os.Remove(filePath)
+		rag.RemoveFileDisplayName(username, filename)
 		rag.DeleteIndex(context.Background(), filename)
-		return "", err
+		return "", "", err
 	}
 
-	return filePath, nil
+	return filename, displayName, nil
 }
 
 func trimUserFiles(username string, userDir string) error {
@@ -81,7 +90,7 @@ func trimUserFiles(username string, userDir string) error {
 	}
 	var files []fileEntry
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() || strings.HasSuffix(e.Name(), ".display") {
 			continue
 		}
 		info, err := e.Info()
@@ -108,6 +117,7 @@ func trimUserFiles(username string, userDir string) error {
 		if err := os.Remove(filepath.Join(userDir, name)); err != nil {
 			log.Printf("Failed to remove file %s for user %s: %v", name, username, err)
 		}
+		rag.RemoveFileDisplayName(username, name)
 	}
 	return nil
 }

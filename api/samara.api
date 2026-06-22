@@ -70,6 +70,14 @@ type ChatHistoryReq {
 	SessionId string `json:"sessionId"`
 }
 
+type DeleteSessionReq {
+	SessionId string `json:"sessionId"`
+}
+
+type DeleteSessionResp {
+	BaseResp
+}
+
 type HistoryItem {
 	IsUser  bool   `json:"is_user"`
 	Content string `json:"content"`
@@ -116,4 +124,7 @@ service samara-api {
 
 	@handler chatHistory
 	post /chat/history (ChatHistoryReq) returns (ChatHistoryResp)
+
+	@handler deleteSession
+	post /chat/delete-session (DeleteSessionReq) returns (DeleteSessionResp)
 }

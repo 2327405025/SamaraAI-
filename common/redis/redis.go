@@ -108,6 +108,12 @@ func InitRedisIndex(ctx context.Context, filename string, dimension int) error {
 	return nil
 }
 
+func IndexExists(ctx context.Context, filename string) bool {
+	indexName := GenerateIndexName(filename)
+	_, err := Rdb.Do(ctx, "FT.INFO", indexName).Result()
+	return err == nil
+}
+
 // DeleteRedisIndex 删除 Redis 索引，支持按文件名区分
 func DeleteRedisIndex(ctx context.Context, filename string) error {
 	indexName := GenerateIndexName(filename)

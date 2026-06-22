@@ -56,6 +56,13 @@ func (a *AIHelper) GetMessages() []*model.Message {
 	return out
 }
 
+func (a *AIHelper) GetModelType() string {
+	if a.model == nil {
+		return ""
+	}
+	return a.model.GetModelType()
+}
+
 // 流式生成
 func (a *AIHelper) StreamResponse(userName string, ctx context.Context, cb StreamCallback, userQuestion string) (*model.Message, error) {
 

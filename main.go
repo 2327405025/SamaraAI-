@@ -2,6 +2,7 @@ package main
 
 import (
 	"SamaraAI/common/aihelper"
+	imgrec "SamaraAI/common/image"
 	mcpserver "SamaraAI/common/mcp/server"
 	"SamaraAI/common/mysql"
 	"SamaraAI/common/rabbitmq"
@@ -86,6 +87,15 @@ func main() {
 				log.Fatalf("MCP server error: %v", err)
 			}
 		}()
+	}
+
+	if c.Image.ModelPath != "" {
+		if _, err := imgrec.GetSharedRecognizer(); err != nil {
+			log.Printf("WARN: image recognizer init failed: %v", err)
+			log.Println("WARN: run scripts\\download-models.cmd (Windows) or bash scripts/download-models.sh")
+		} else {
+			log.Println("image recognizer init success")
+		}
 	}
 
 	server := rest.MustNewServer(c.RestConf)

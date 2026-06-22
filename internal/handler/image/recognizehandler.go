@@ -27,7 +27,7 @@ func RecognizeImageHandler(w http.ResponseWriter, r *http.Request) {
 	className, err := imglogic.RecognizeImage(header)
 	if err != nil {
 		log.Println("RecognizeImage fail", err)
-		httpx.OkJson(w, resp.Base(code.CodeServerBusy))
+		httpx.OkJson(w, resp.Base(imglogic.MapRecognizeError(err)))
 		return
 	}
 

@@ -14,14 +14,23 @@
 
       <div class="session-scroll">
         <p v-if="sessions.length === 0" class="session-empty">暂无历史对话</p>
-        <button
+        <div
           v-for="session in sessions"
           :key="session.id"
-          :class="['session-btn', { active: currentSessionId === session.id && !tempSession }]"
-          @click="switchSession(session.id)"
+          :class="['session-item', { active: currentSessionId === session.id && !tempSession }]"
         >
-          <span class="session-title">{{ session.name || '新对话' }}</span>
-        </button>
+          <button class="session-btn" @click="switchSession(session.id)">
+            <span class="session-title">{{ session.name || '新对话' }}</span>
+          </button>
+          <button
+            class="session-delete"
+            type="button"
+            title="删除对话"
+            @click.stop="deleteSession(session.id)"
+          >
+            ×
+          </button>
+        </div>
       </div>
 
       <div class="sidebar-footer">
@@ -32,12 +41,20 @@
     <!-- 主区域 -->
     <main class="main-panel">
       <header class="main-header">
-        <select v-model="selectedModel" class="model-picker">
-          <option value="1">DeepSeek 兼容 · 百炼</option>
-          <option value="2">RAG 知识库</option>
-          <option value="3">MCP 工具</option>
-        </select>
-        <button class="icon-btn" title="上传文档" :disabled="uploading" @click="triggerFileUpload">
+        <div class="header-left">
+          <select v-model="selectedModel" class="model-picker">
+            <option value="1">DeepSeek 兼容 · 百炼</option>
+            <option value="2">RAG 知识库</option>
+            <option value="3">MCP 工具</option>
+          </select>
+          <span class="mode-hint">{{ modeHint }}</span>
+        </div>
+        <button
+          class="icon-btn"
+          title="上传 RAG 知识库文档（.md / .txt，不影响当前对话模式）"
+          :disabled="uploading"
+          @click="triggerFileUpload"
+        >
           {{ uploading ? '…' : '📎' }}
         </button>
         <input
@@ -48,6 +65,32 @@
           @change="handleFileUpload"
         />
       </header>
+
+      <div v-if="uploadedFiles.length > 0" class="rag-files-bar">
+        <span class="rag-files-label">知识库文档</span>
+        <div class="rag-files-list">
+          <span v-for="file in uploadedFiles" :key="file.fileId" class="rag-file-chip" :title="file.fileName">
+            <span class="rag-file-name">📄 {{ file.fileName }}</span>
+            <button
+              type="button"
+              class="rag-file-delete"
+              title="删除文档"
+              @click="deleteRagFile(file)"
+            >
+              ×
+            </button>
+          </span>
+        </div>
+        <button
+          v-if="selectedModel !== '2'"
+          type="button"
+          class="rag-switch-btn"
+          @click="selectedModel = '2'"
+        >
+          用 RAG 提问
+        </button>
+        <span v-else class="rag-files-note">当前 RAG 模式会使用以上文档</span>
+      </div>
 
       <div class="messages-wrap" ref="messagesRef">
         <!-- 空状态 -->
@@ -113,7 +156,7 @@
             <span v-else class="spinner" />
           </button>
         </div>
-        <p class="composer-tip">Enter 发送 · 内容由 AI 生成，请仔细甄别</p>
+        <p class="composer-tip">{{ composerTip }}</p>
       </div>
     </main>
   </div>
@@ -121,7 +164,7 @@
 
 <script>
 import { ref, nextTick, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../utils/api'
 import { consumeChatSSE, getStreamChatUrl, renderSimpleMarkdown } from '../utils/streamChat'
 
@@ -148,9 +191,30 @@ export default {
     const messageInput = ref(null)
     const selectedModel = ref('1')
     const uploading = ref(false)
+    const uploadedFiles = ref([])
     const fileInput = ref(null)
 
     const renderMarkdown = renderSimpleMarkdown
+
+    const modeHints = {
+      1: '普通对话，不读取知识库文档',
+      2: '基于已上传文档回答',
+      3: '调用 MCP 工具（如天气），不读取文档'
+    }
+
+    const modeHint = computed(() => modeHints[selectedModel.value] || '')
+
+    const composerTip = computed(() => {
+      if (selectedModel.value === '2') {
+        return uploadedFiles.value.length > 0
+          ? 'Enter 发送 · RAG 模式将检索上方知识库文档'
+          : 'Enter 发送 · 请先用 📎 上传 .md / .txt 文档'
+      }
+      if (selectedModel.value === '3') {
+        return 'Enter 发送 · MCP 模式可查询天气等外部信息'
+      }
+      return 'Enter 发送 · 内容由 AI 生成，请仔细甄别'
+    })
 
     const autoResize = (e) => {
       const el = e.target
@@ -192,6 +256,17 @@ export default {
       const msg = currentMessages.value[index]
       if (!msg) return
       syncMessage(msg.id, (m) => ({ ...m, content: m.content + chunk }))
+    }
+
+    const loadUploadedFiles = async () => {
+      try {
+        const response = await api.get('/file/list')
+        if (response.data?.status_code === 1000 && Array.isArray(response.data.files)) {
+          uploadedFiles.value = response.data.files
+        }
+      } catch (error) {
+        console.error('Load uploaded files error:', error)
+      }
     }
 
     const loadSessions = async () => {
@@ -245,6 +320,41 @@ export default {
       scrollToBottom()
     }
 
+    const deleteSession = async (sessionId) => {
+      if (!sessionId || loading.value) return
+      try {
+        await ElMessageBox.confirm('确定删除该对话？删除后无法恢复。', '删除对话', {
+          confirmButtonText: '删除',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+      } catch {
+        return
+      }
+
+      try {
+        const response = await api.post('/AI/chat/delete-session', { sessionId })
+        if (response.data?.status_code !== 1000) {
+          ElMessage.error(response.data?.status_msg || '删除失败')
+          return
+        }
+
+        delete sessions.value[sessionId]
+        if (currentSessionId.value === sessionId) {
+          const remaining = Object.keys(sessions.value)
+          if (remaining.length > 0) {
+            await switchSession(remaining[0])
+          } else {
+            createNewSession()
+          }
+        }
+        ElMessage.success('对话已删除')
+      } catch (error) {
+        console.error('Delete session error:', error)
+        ElMessage.error('删除失败')
+      }
+    }
+
     const shouldUseNewSession = () =>
       tempSession.value || !currentSessionId.value || currentSessionId.value === 'temp'
 
@@ -254,6 +364,10 @@ export default {
         return
       }
       if (loading.value) return
+      if (selectedModel.value === '2' && uploadedFiles.value.length === 0) {
+        ElMessage.warning('RAG 模式需要知识库文档，请先用 📎 上传 .md / .txt')
+        return
+      }
 
       const userMessage = createMessage('user', inputMessage.value)
       const currentInput = inputMessage.value
@@ -399,7 +513,23 @@ export default {
           headers: { 'Content-Type': 'multipart/form-data' }
         })
         if (response.data?.status_code === 1000) {
-          ElMessage.success('文档已上传，可选 RAG 模型使用')
+          const item = {
+            fileId: response.data.file_id,
+            fileName: response.data.file_name || file.name
+          }
+          if (item.fileId) {
+            uploadedFiles.value = [
+              item,
+              ...uploadedFiles.value.filter(f => f.fileId !== item.fileId)
+            ]
+          } else {
+            await loadUploadedFiles()
+          }
+          ElMessage.success(
+            selectedModel.value === '2'
+              ? `「${item.fileName || file.name}」已加入知识库，可直接提问`
+              : `「${item.fileName || file.name}」已加入知识库，总结文档请切换到 RAG 模式或点「用 RAG 提问」`
+          )
         } else {
           ElMessage.error(response.data?.status_msg || '上传失败')
         }
@@ -411,8 +541,38 @@ export default {
       }
     }
 
+    const deleteRagFile = async (file) => {
+      if (!file?.fileId) return
+      try {
+        await ElMessageBox.confirm(
+          `确定删除「${file.fileName}」？删除后无法恢复。`,
+          '删除文档',
+          {
+            confirmButtonText: '删除',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        )
+      } catch {
+        return
+      }
+
+      try {
+        const response = await api.post('/file/delete', { fileId: file.fileId })
+        if (response.data?.status_code !== 1000) {
+          ElMessage.error(response.data?.status_msg || '删除失败')
+          return
+        }
+        uploadedFiles.value = uploadedFiles.value.filter(f => f.fileId !== file.fileId)
+        ElMessage.success('文档已删除')
+      } catch (error) {
+        console.error('Delete rag file error:', error)
+        ElMessage.error('删除失败')
+      }
+    }
+
     onMounted(async () => {
-      await loadSessions()
+      await Promise.all([loadSessions(), loadUploadedFiles()])
       if (!currentSessionId.value) {
         createNewSession()
       }
@@ -428,14 +588,19 @@ export default {
       messagesRef,
       messageInput,
       selectedModel,
+      modeHint,
+      composerTip,
       uploading,
+      uploadedFiles,
       fileInput,
       renderMarkdown,
       createNewSession,
       switchSession,
+      deleteSession,
       sendMessage,
       triggerFileUpload,
       handleFileUpload,
+      deleteRagFile,
       autoResize
     }
   }
@@ -524,11 +689,28 @@ export default {
   padding: 24px 12px;
 }
 
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+  border-radius: 8px;
+}
+
+.session-item:hover .session-delete {
+  opacity: 1;
+}
+
+.session-item.active {
+  background: var(--ds-bg);
+  box-shadow: var(--ds-shadow);
+}
+
 .session-btn {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   text-align: left;
   padding: 10px 12px;
-  margin-bottom: 2px;
   border: none;
   border-radius: 8px;
   background: transparent;
@@ -542,10 +724,33 @@ export default {
   background: rgba(0, 0, 0, 0.05);
 }
 
-.session-btn.active {
-  background: var(--ds-bg);
+.session-item.active .session-btn {
   font-weight: 500;
-  box-shadow: var(--ds-shadow);
+}
+
+.session-delete {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin-right: 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ds-text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+
+.session-delete:hover {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+}
+
+.session-item.active .session-delete {
+  opacity: 1;
 }
 
 .session-title {
@@ -590,10 +795,26 @@ export default {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 10px;
   padding: 0 20px;
   border-bottom: 1px solid var(--ds-border);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.mode-hint {
+  font-size: 12px;
+  color: var(--ds-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .model-picker {
@@ -609,6 +830,91 @@ export default {
 
 .model-picker:focus {
   border-color: var(--ds-primary);
+}
+
+.rag-files-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--ds-border);
+  background: var(--ds-bg-muted, #f8fafc);
+  flex-shrink: 0;
+  min-height: 40px;
+  flex-wrap: wrap;
+}
+
+.rag-files-label {
+  font-size: 12px;
+  color: var(--ds-text-secondary);
+  white-space: nowrap;
+}
+
+.rag-files-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rag-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 260px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+  background: var(--ds-bg);
+  border: 1px solid var(--ds-border);
+  font-size: 12px;
+  color: var(--ds-text);
+}
+
+.rag-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.rag-file-delete {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ds-text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.rag-file-delete:hover {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+}
+
+.rag-switch-btn {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border: 1px solid var(--ds-primary, #2563eb);
+  border-radius: 999px;
+  background: var(--ds-bg);
+  color: var(--ds-primary, #2563eb);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rag-switch-btn:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.rag-files-note {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--ds-text-secondary);
 }
 
 .icon-btn {

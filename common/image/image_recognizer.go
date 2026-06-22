@@ -11,7 +11,6 @@ import (
 	_ "image/png"
 	"os"
 	"path/filepath"
-	"sync"
 
 	ort "github.com/yalue/onnxruntime_go"
 	"golang.org/x/image/draw"
@@ -33,23 +32,21 @@ const (
 	defaultOutputName = "mobilenetv20_output_flatten0_reshape0"
 )
 
-var (
-	initOnce sync.Once
-	initErr  error
-)
-
 // NewImageRecognizer 创建识别器（自动使用默认 input/output 名称）
 func NewImageRecognizer(modelPath, labelPath string, inputH, inputW int) (*ImageRecognizer, error) {
 	if inputH <= 0 || inputW <= 0 {
 		inputH, inputW = 224, 224
 	}
 
-	// 初始化 ONNX 环境（全局一次）
-	initOnce.Do(func() {
-		initErr = ort.InitializeEnvironment()
-	})
-	if initErr != nil {
-		return nil, fmt.Errorf("onnxruntime initialize error: %w", initErr)
+	if err := ensureOrtEnvironment(); err != nil {
+		return nil, err
+	}
+
+	if _, err := os.Stat(modelPath); err != nil {
+		return nil, fmt.Errorf("model file not found (%s): %w", modelPath, err)
+	}
+	if _, err := os.Stat(labelPath); err != nil {
+		return nil, fmt.Errorf("label file not found (%s): %w", labelPath, err)
 	}
 
 	// 预先创建输入输出 Tensor

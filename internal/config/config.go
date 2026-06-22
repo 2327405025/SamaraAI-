@@ -74,9 +74,10 @@ type RagConf struct {
 }
 
 type McpConf struct {
-	Enabled bool   `json:",optional"`
-	Addr    string `json:",optional"`
-	BaseURL string `json:",optional"`
+	Enabled       bool   `json:",optional"`
+	Addr          string `json:",optional"`
+	BaseURL       string `json:",optional"`
+	ChatModelName string `json:",optional"`
 }
 
 type OpenAIConf struct {
@@ -97,10 +98,11 @@ type BaiduConf struct {
 }
 
 type ImageConf struct {
-	ModelPath string `json:",optional"`
-	LabelPath string `json:",optional"`
-	InputH    int    `json:",optional"`
-	InputW    int    `json:",optional"`
+	ModelPath      string `json:",optional"`
+	LabelPath      string `json:",optional"`
+	RuntimeLibPath string `json:",optional"` // onnxruntime.dll / libonnxruntime.so，留空则自动查找
+	InputH         int    `json:",optional"`
+	InputW         int    `json:",optional"`
 }
 
 type RedisKeyConf struct {

@@ -24,7 +24,12 @@ func NewJwtAuthMiddleware() *JwtAuthMiddleware {
 
 func (m *JwtAuthMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		SetCORSHeaders(w)
+		SetCORSHeaders(w, r)
+
+		if r.Method == http.MethodOptions {
+			next(w, r)
+			return
+		}
 
 		var token string
 		authHeader := r.Header.Get("Authorization")

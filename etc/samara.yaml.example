@@ -52,6 +52,7 @@ Mcp:
   Enabled: true
   Addr: ":8081"
   BaseURL: http://localhost:8081/mcp
+  ChatModelName: qwen-plus
 
 OpenAI:
   ApiKey: your-ali-dashscope-api-key
@@ -73,5 +74,6 @@ AiHelper:
 Image:
   ModelPath: ./models/mobilenetv2/mobilenetv2-7.onnx
   LabelPath: ./imagenet_classes.txt
+  # RuntimeLibPath: ./onnxruntime.dll   # Windows 可选，留空则自动查找项目根目录
   InputH: 224
   InputW: 224

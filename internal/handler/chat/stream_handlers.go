@@ -13,11 +13,11 @@ import (
 	"github.com/zeromicro/go-zero/rest/httpx"
 )
 
-func setSSEHeaders(w http.ResponseWriter) {
+func setSSEHeaders(w http.ResponseWriter, r *http.Request) {
+	middleware.SetCORSHeaders(w, r)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("X-Accel-Buffering", "no")
 }
 
@@ -29,7 +29,7 @@ func CreateStreamSessionAndSendMessageHandler(_ *svc.ServiceContext) http.Handle
 			return
 		}
 		userName := middleware.UserNameFromContext(r.Context())
-		setSSEHeaders(w)
+		setSSEHeaders(w, r)
 
 		flusher, ok := w.(http.Flusher)
 		if !ok {
@@ -61,7 +61,7 @@ func ChatStreamSendHandler(_ *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 		userName := middleware.UserNameFromContext(r.Context())
-		setSSEHeaders(w)
+		setSSEHeaders(w, r)
 
 		flusher, ok := w.(http.Flusher)
 		if !ok {

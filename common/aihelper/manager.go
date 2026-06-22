@@ -37,6 +37,18 @@ func (m *AIHelperManager) GetOrCreateAIHelper(userName string, sessionID string,
 
 	helper, exists := userHelpers[sessionID]
 	if exists {
+		if helper.GetModelType() != modelType {
+			factory := GetGlobalFactory()
+			newHelper, err := factory.CreateAIHelper(ctx, modelType, sessionID, config)
+			if err != nil {
+				return nil, err
+			}
+			for _, msg := range helper.GetMessages() {
+				newHelper.AddMessage(msg.Content, msg.UserName, msg.IsUser, false)
+			}
+			userHelpers[sessionID] = newHelper
+			return newHelper, nil
+		}
 		return helper, nil
 	}
 

@@ -9,10 +9,12 @@ import (
 	"SamaraAI/internal/config"
 	"SamaraAI/model"
 	"context"
+	"errors"
 	"log"
 	"net/http"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func aiHelperConfig(userName string) map[string]interface{} {
@@ -128,4 +130,27 @@ func messagesToHistory(msgs []*model.Message) []model.History {
 
 func ChatStreamSend(ctx context.Context, userName, sessionID, userQuestion, modelType string, writer http.ResponseWriter) code.Code {
 	return StreamMessageToExistingSession(ctx, userName, sessionID, userQuestion, modelType, writer)
+}
+
+func deleteSession(userName, sessionID string) code.Code {
+	if sessionID == "" {
+		return code.CodeInvalidParams
+	}
+	if _, err := sessiondao.GetSessionByIDAndUser(sessionID, userName); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return code.CodeRecordNotFound
+		}
+		log.Println("deleteSession GetSession error:", err)
+		return code.CodeServerBusy
+	}
+	if err := message.DeleteMessagesBySessionID(sessionID); err != nil {
+		log.Println("deleteSession DeleteMessages error:", err)
+		return code.CodeServerBusy
+	}
+	if err := sessiondao.DeleteSession(sessionID, userName); err != nil {
+		log.Println("deleteSession DeleteSession error:", err)
+		return code.CodeServerBusy
+	}
+	aihelper.GetGlobalManager().RemoveAIHelper(userName, sessionID)
+	return code.CodeSuccess
 }

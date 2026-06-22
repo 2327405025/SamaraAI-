@@ -118,7 +118,7 @@ func NewMCPServer() *server.MCPServer {
 	weatherClient := NewWeatherAPIClient()
 
 	mcpServer := server.NewMCPServer(
-		"weather-query-server",
+		"samara-mcp-server",
 		"1.0.0",
 		server.WithToolCapabilities(true),
 		server.WithLogging(),
@@ -127,7 +127,7 @@ func NewMCPServer() *server.MCPServer {
 	mcpServer.AddTool(
 		mcp.NewTool(
 			"get_weather",
-			mcp.WithDescription("获取指定城市的天气信息"),
+			mcp.WithDescription("获取指定城市的实时天气信息（外部 API）"),
 			mcp.WithString(
 				"city",
 				mcp.Description("城市名称，如 Beijing、上海"),

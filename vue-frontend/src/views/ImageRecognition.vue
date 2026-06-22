@@ -98,7 +98,8 @@ export default {
         if (response.data?.class_name) {
           messages.value.push({ role: 'assistant', content: `识别结果：${response.data.class_name}` })
         } else {
-          messages.value.push({ role: 'assistant', content: response.data?.status_msg || '识别失败' })
+          const msg = response.data?.status_msg || '识别失败'
+          messages.value.push({ role: 'assistant', content: `识别失败：${msg}` })
         }
       } catch (error) {
         messages.value.push({ role: 'assistant', content: `请求失败：${error.message}` })

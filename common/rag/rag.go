@@ -6,6 +6,7 @@ import (
 	"SamaraAI/internal/config"
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -28,6 +29,7 @@ type RAGIndexer struct {
 
 type RAGQuery struct {
 	embedding embedding.Embedder
+	username  string
 	filenames []string
 }
 
@@ -147,25 +149,20 @@ func DeleteIndex(ctx context.Context, filename string) error {
 	return nil
 }
 
-// ListUserFilenames 列出用户已上传的知识库文件
+// ListUserFilenames 列出用户已上传的知识库文件（内部存储名）
 func ListUserFilenames(username string) ([]string, error) {
-	userDir := UserUploadDir(username)
-	entries, err := os.ReadDir(userDir)
+	files, err := ListUserFiles(username)
 	if err != nil {
-		return nil, fmt.Errorf("no uploaded file found for user %s", username)
+		return nil, err
 	}
-
-	var filenames []string
-	for _, f := range entries {
-		if !f.IsDir() {
-			filenames = append(filenames, f.Name())
-		}
-	}
-	if len(filenames) == 0 {
+	if len(files) == 0 {
 		return nil, fmt.Errorf("no valid file found for user %s", username)
 	}
-	sort.Strings(filenames)
-	return filenames, nil
+	names := make([]string, 0, len(files))
+	for _, f := range files {
+		names = append(names, f.FileID)
+	}
+	return names, nil
 }
 
 // NewRAGQuery 创建 RAG 查询器（支持检索用户全部已上传文档）
@@ -190,8 +187,31 @@ func NewRAGQuery(ctx context.Context, username string) (*RAGQuery, error) {
 
 	return &RAGQuery{
 		embedding: embedder,
+		username:  username,
 		filenames: filenames,
 	}, nil
+}
+
+// EnsureFileIndexed 若 Redis 索引缺失则从本地文件重建（例如更换 Redis 实例后）
+func EnsureFileIndexed(ctx context.Context, username, fileID string) error {
+	if redisPkg.IndexExists(ctx, fileID) {
+		return nil
+	}
+	return reindexFile(ctx, username, fileID)
+}
+
+func reindexFile(ctx context.Context, username, fileID string) error {
+	filePath := filepath.Join(UserUploadDir(username), fileID)
+	if _, err := os.Stat(filePath); err != nil {
+		return fmt.Errorf("local file missing for %s: %w", fileID, err)
+	}
+	log.Printf("RAG reindex: rebuilding index for %s (user=%s)", fileID, username)
+	_ = DeleteIndex(ctx, fileID)
+	indexer, err := NewRAGIndexer(fileID, config.Get().Rag.EmbeddingModel)
+	if err != nil {
+		return err
+	}
+	return indexer.IndexFile(ctx, filePath)
 }
 
 func newRetriever(ctx context.Context, filename string, embedder embedding.Embedder) (retriever.Retriever, error) {
@@ -248,11 +268,26 @@ func (r *RAGQuery) RetrieveDocuments(ctx context.Context, query string) ([]*sche
 	var allDocs []*schema.Document
 
 	for _, filename := range r.filenames {
+		if err := EnsureFileIndexed(ctx, r.username, filename); err != nil {
+			log.Printf("EnsureFileIndexed %s failed: %v", filename, err)
+			continue
+		}
+
 		rtr, err := newRetriever(ctx, filename, r.embedding)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create retriever for %s: %w", filename, err)
 		}
 		docs, err := rtr.Retrieve(ctx, query)
+		if err != nil {
+			log.Printf("retrieve %s failed, retry after reindex: %v", filename, err)
+			if reindexErr := reindexFile(ctx, r.username, filename); reindexErr == nil {
+				if rtr, err = newRetriever(ctx, filename, r.embedding); err == nil {
+					docs, err = rtr.Retrieve(ctx, query)
+				}
+			} else {
+				log.Printf("reindex %s failed: %v", filename, reindexErr)
+			}
+		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to retrieve documents from %s: %w", filename, err)
 		}
@@ -279,7 +314,9 @@ func (r *RAGQuery) RetrieveDocuments(ctx context.Context, query string) ([]*sche
 // BuildRAGPrompt 构建包含检索文档的提示词
 func BuildRAGPrompt(query string, docs []*schema.Document) string {
 	if len(docs) == 0 {
-		return query
+		return fmt.Sprintf(`用户问题：%s
+
+说明：系统未检索到已上传文档中的相关内容。请明确告知用户：当前知识库中没有找到与问题匹配的文档片段，建议确认是否已上传文档并选择了 RAG 模式。不要假装已经阅读了文件。`, query)
 	}
 
 	contextText := ""

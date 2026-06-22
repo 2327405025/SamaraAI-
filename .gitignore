@@ -3,6 +3,7 @@
 *.dll
 *.so
 *.dylib
+onnxruntime*.zip
 
 # Go
 /vendor/
